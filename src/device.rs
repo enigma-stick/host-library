@@ -1,9 +1,10 @@
+use crate::protocol::{
+    EmptyRequest, KmCommand, KmDecode, KmEncode, KmFrameHeader, usb_decode_response,
+    usb_encode_request,
+};
 use crate::{
-    EmptyRequest,
     EnigmaError::{self, Usb},
-    KmCommand, KmFrameHeader, Status,
-    protocol::{KmDecode, KmEncode},
-    usb_decode_response, usb_encode_request,
+    Status,
 };
 
 const VENDOR_ID: u16 = 0x303A;
@@ -15,6 +16,7 @@ const ALTERNATE_SETTING: u8 = 0;
 const OUT_ENDPOINT: u8 = 0x01;
 const IN_ENDPOINT: u8 = 0x81;
 
+#[derive(Debug)]
 pub struct Device {
     handle: rusb::DeviceHandle<rusb::GlobalContext>,
     received: Vec<u8>,

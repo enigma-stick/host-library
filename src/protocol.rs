@@ -1,5 +1,5 @@
 use crate::codec::Decoder;
-use crate::error::{DecodeError, EnigmaError, KmDeviceError};
+use crate::error::{DecodeError, DeviceError, EnigmaError};
 
 #[derive(Clone, Copy, Debug)]
 pub enum KmCommand {
@@ -104,7 +104,7 @@ pub fn usb_decode_response<T: KmDecode<T>>(
 
     if frame_header.command != expected as u8 {
         if frame_header.command == 0xFF {
-            let decoded_error = KmDeviceError::decode(&payload_bytes)?;
+            let decoded_error = DeviceError::decode(&payload_bytes)?;
             return Err(EnigmaError::Device(decoded_error));
         } else {
             return Err(EnigmaError::Protocol(DecodeError::UnexpectedResponse(

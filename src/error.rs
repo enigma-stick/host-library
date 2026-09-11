@@ -1,7 +1,10 @@
+use std::fmt::Display;
+
 use crate::codec::Decoder;
 
-#[derive(Debug)]
-pub enum DeviceError {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DeviceErrorCode {
     Ok = 0x00,
     AuthRequired = 0x01,
     AuthFailed = 0x02,
@@ -17,7 +20,7 @@ pub enum DeviceError {
     Fail = 0xFF,
 }
 
-impl TryFrom<u8> for DeviceError {
+impl TryFrom<u8> for DeviceErrorCode {
     type Error = DecodeError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -40,15 +43,24 @@ impl TryFrom<u8> for DeviceError {
     }
 }
 
-#[derive(Debug)]
-pub enum EnigmaError {
-    Protocol(DecodeError),
-    Device(KmDeviceError),
-    Usb(rusb::Error),
-    DeviceNotFound,
-    MultipleDevicesFound,
-    MissingInterface { interface: u8, alternate: u8 },
-    MissingBulkEndpoint(u8),
+impl Display for DeviceErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ok => f.write_str("Ok"),
+            Self::AuthRequired => f.write_str("Authentication required"),
+            Self::AuthFailed => f.write_str("Authentication failed"),
+            Self::InvalidInput => f.write_str("Invalid input"),
+            Self::UnsupportedOperation => f.write_str("Unsupported operation"),
+            Self::MissingKey => f.write_str("Missing key"),
+            Self::PolicyReject => f.write_str("Policy rejection"),
+            Self::Storage => f.write_str("Storage error"),
+            Self::BadCommand => f.write_str("Bad command"),
+            Self::Serialize => f.write_str("Serialization error"),
+            Self::InitFailed => f.write_str("Initialization failed"),
+            Self::InvalidState => f.write_str("Invalid state"),
+            Self::Fail => f.write_str("Unknown error"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -63,17 +75,42 @@ pub enum DecodeError {
     InvalidUtf8,
 }
 
-#[derive(Debug)]
-pub struct KmDeviceError {
-    code: DeviceError,
-    message: String,
+impl Display for DecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TruncatedHeader => f.write_str("Truncated header"),
+            Self::TruncatedPayload => f.write_str("Truncated payload"),
+            Self::InvalidMagic => f.write_str("Invalid header magic"),
+            Self::UnsupportedVersion(v) => {
+                write!(f, "Unsupported version: {:02X}", v)
+            }
+            Self::UnexpectedResponse(r) => {
+                write!(f, "Unexpected response: {:02X}", r)
+            }
+            Self::InvalidTokenState(s) => {
+                write!(f, "Invalid token state: {:02X}", s)
+            }
+            Self::InvalidSessionState(s) => {
+                write!(f, "Invalid session state: {:02X}", s)
+            }
+            Self::InvalidUtf8 => f.write_str("Invalid UTF-8"),
+        }
+    }
 }
 
-impl KmDeviceError {
+impl std::error::Error for DecodeError {}
+
+#[derive(Debug)]
+pub struct DeviceError {
+    pub code: DeviceErrorCode,
+    pub message: String,
+}
+
+impl DeviceError {
     pub(crate) fn decode(payload: &[u8]) -> Result<Self, DecodeError> {
         let mut decoder = Decoder::new(payload);
 
-        let code = DeviceError::try_from(decoder.read_u8()?)?;
+        let code = DeviceErrorCode::try_from(decoder.read_u8()?)?;
         let message = decoder.read_str()?;
 
         Ok(Self {
@@ -81,6 +118,29 @@ impl KmDeviceError {
             message: message.to_owned(),
         })
     }
+}
+
+impl Display for DeviceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.message.is_empty() {
+            write!(f, "{}", self.code)
+        } else {
+            write!(f, "{}: {}", self.code, self.message)
+        }
+    }
+}
+
+impl std::error::Error for DeviceError {}
+
+#[derive(Debug)]
+pub enum EnigmaError {
+    Protocol(DecodeError),
+    Device(DeviceError),
+    Usb(rusb::Error),
+    DeviceNotFound,
+    MultipleDevicesFound,
+    MissingInterface { interface: u8, alternate: u8 },
+    MissingBulkEndpoint(u8),
 }
 
 impl From<DecodeError> for EnigmaError {
@@ -92,6 +152,40 @@ impl From<DecodeError> for EnigmaError {
 impl From<rusb::Error> for EnigmaError {
     fn from(value: rusb::Error) -> Self {
         Self::Usb(value)
+    }
+}
+
+impl Display for EnigmaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Protocol(error) => write!(f, "Protocol error: {error}"),
+            Self::Device(error) => write!(f, "Device error: {error}"),
+            Self::Usb(error) => write!(f, "USB error: {error}"),
+            Self::DeviceNotFound => f.write_str("Device not found"),
+            Self::MultipleDevicesFound => f.write_str("Multiple devices found"),
+            Self::MissingInterface {
+                interface,
+                alternate,
+            } => write!(
+                f,
+                "Missing interface: {:02X} / {:02X}",
+                interface, alternate
+            ),
+            Self::MissingBulkEndpoint(endpoint) => {
+                write!(f, "Missing bulk endpoint: {:02X}", endpoint)
+            }
+        }
+    }
+}
+
+impl std::error::Error for EnigmaError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Protocol(error) => Some(error),
+            Self::Device(error) => Some(error),
+            Self::Usb(error) => Some(error),
+            _ => None,
+        }
     }
 }
 
@@ -115,8 +209,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(EnigmaError::Device(KmDeviceError {
-                code: DeviceError::AuthRequired,
+            Err(EnigmaError::Device(DeviceError {
+                code: DeviceErrorCode::AuthRequired,
                 message
             })) if message == "bad!"
         ));

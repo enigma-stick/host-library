@@ -2,7 +2,7 @@ use crate::codec::Decoder;
 use crate::error::DecodeError;
 use crate::protocol::KmDecode;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenState {
     Uninitialized = 0x0,
     Provisioning = 0x1,
@@ -22,7 +22,7 @@ impl TryFrom<u32> for TokenState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
     Closed = 0x0,
     Authenticated = 0x1,
@@ -42,10 +42,10 @@ impl TryFrom<u32> for SessionState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Status {
-    token: TokenState,
-    session: SessionState,
+    pub token: TokenState,
+    pub session: SessionState,
 }
 
 impl KmDecode<Status> for Status {

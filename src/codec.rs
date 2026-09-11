@@ -5,6 +5,7 @@ pub(crate) struct Decoder<'a> {
     position: usize,
 }
 
+#[allow(dead_code)]
 pub(crate) struct Encoder {
     bytes: Vec<u8>,
 }
