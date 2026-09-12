@@ -163,6 +163,10 @@ impl Device {
         self.transact(KmCommand::Authenticate, request)
     }
 
+    pub fn lock(&mut self) -> Result<(), EnigmaError> {
+        self.transact(KmCommand::Lock, EmptyRequest {})
+    }
+
     pub fn close(&mut self) -> Result<(), EnigmaError> {
         if self.claimed {
             self.handle.release_interface(DATA_INTERFACE)?;

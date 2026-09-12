@@ -32,6 +32,24 @@ int main(void) {
   printf("  Token: %u\n", status.token_state);
   printf("  Session: %u\n", status.session_state);
 
+  res = enigma_lock(device, &error);
+  if (res != ENIGMA_OK) {
+    printf("Could not lock the device (%02x) - %s\n", res, error.message);
+    exit = 1;
+    goto cleanup;
+  }
+
+  res = enigma_status(device, &status, &error);
+  if (res != ENIGMA_OK) {
+    printf("Could not get device status (%02x) - %s\n", res, error.message);
+    exit = 1;
+    goto cleanup;
+  }
+
+  printf("== Device status ==\n");
+  printf("  Token: %u\n", status.token_state);
+  printf("  Session: %u\n", status.session_state);
+
 cleanup:
   res = enigma_close(device, &error);
   if (res != ENIGMA_OK) {

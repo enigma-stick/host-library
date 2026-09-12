@@ -273,6 +273,63 @@ pub unsafe extern "C" fn enigma_authenticate(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_lock(
+    in_device: *mut EnigmaDevice,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null() {
+        if !out_error.is_null() {
+            let mut err = EnigmaErrorInfo::empty();
+            err.code = ENIGMA_INVALID_ARG;
+            unsafe {
+                out_error.write(err);
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let device = unsafe { &mut *in_device };
+
+        device
+            .device
+            .lock()
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))
+    });
+
+    match outcome {
+        Ok(Ok(_)) => {
+            if !out_error.is_null() {
+                unsafe {
+                    out_error.write(EnigmaErrorInfo::empty());
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                let mut err = EnigmaErrorInfo::empty();
+                err.code = ENIGMA_INTERNAL_ERROR;
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn enigma_close(
     in_device: *mut EnigmaDevice,
     out_error: *mut EnigmaErrorInfo,

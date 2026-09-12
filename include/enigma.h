@@ -74,7 +74,8 @@ enigma_result enigma_status(enigma_device *device, enigma_status_info *status,
  *  @brief Authenticate the device token
  *
  *  Authenticating the token unlocks it globally. Cryptographic operations
- *  require the token to be authenticated
+ *  require the token to be authenticated. Authentication only works if the
+ *  token is already locked.
  *
  *  @paran[in] device Device handle
  *  @param[in] pin Device authentication PIN
@@ -83,6 +84,19 @@ enigma_result enigma_status(enigma_device *device, enigma_status_info *status,
  */
 enigma_result enigma_authenticate(enigma_device *device, const char *pin,
                                   enigma_error *error);
+
+/**
+ *  @brief Lock the device token
+ *
+ *  Locking the token prevents cryptographic operations from taking place
+ *  on the secure element and closes the open session on the ESP. Locking
+ *  only works if the token is already authenticated.
+ *
+ *  @param[in] device Device handle
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_lock(enigma_device *device, enigma_error *error);
 
 /**
  *  @brief Close device

@@ -5,6 +5,7 @@ use crate::error::{DecodeError, DeviceError, EnigmaError};
 pub enum KmCommand {
     Status = 0x02,
     Authenticate = 0x11,
+    Lock = 0x12,
 }
 
 impl KmCommand {
@@ -12,6 +13,7 @@ impl KmCommand {
         match self {
             Self::Status => 0x02,
             Self::Authenticate => 0x00,
+            Self::Lock => 0x00,
         }
     }
 }
