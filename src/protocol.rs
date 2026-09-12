@@ -1,11 +1,14 @@
 use crate::codec::{Decoder, Encoder};
 use crate::error::{DecodeError, DeviceError, EnigmaError};
+use crate::key::KeyFilterFlags;
+use crate::{KeyType, KeyUsage};
 
 #[derive(Clone, Copy, Debug)]
 pub enum KmCommand {
     Status = 0x02,
     Authenticate = 0x11,
     Lock = 0x12,
+    ListKeys = 0x40,
 }
 
 impl KmCommand {
@@ -14,6 +17,7 @@ impl KmCommand {
             Self::Status => 0x02,
             Self::Authenticate => 0x00,
             Self::Lock => 0x00,
+            Self::ListKeys => 0x40,
         }
     }
 }
@@ -75,7 +79,7 @@ pub(crate) trait KmEncode {
 }
 
 pub(crate) trait KmDecode<T> {
-    fn decode(payload: &[u8]) -> Result<T, DecodeError>;
+    fn decode(decoder: &mut Decoder) -> Result<T, DecodeError>;
 }
 
 pub struct EmptyRequest {}
@@ -86,8 +90,8 @@ impl KmEncode for EmptyRequest {
 }
 
 impl KmDecode<()> for () {
-    fn decode(payload: &[u8]) -> Result<(), DecodeError> {
-        if payload.len() > 0 {
+    fn decode(decoder: &mut Decoder) -> Result<(), DecodeError> {
+        if !decoder.is_empty() {
             return Err(DecodeError::UnexpectedPayload);
         }
 
@@ -103,6 +107,42 @@ impl KmEncode for AuthenticateRequest<'_> {
     fn encode(&self) -> Vec<u8> {
         let mut encoder = Encoder::new();
         encoder.write_str(self.pin);
+        encoder.bytes()
+    }
+}
+
+#[derive(Default)]
+pub struct KeyListFilter<'a> {
+    pub key_type: Option<KeyType>,
+    pub key_usage: Option<KeyUsage>,
+    pub key_label: Option<&'a str>,
+    pub key_id: Option<u32>,
+}
+
+impl KmEncode for KeyListFilter<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+
+        let mut flags = KeyFilterFlags::DEFAULT;
+        if self.key_type.is_some() {
+            flags |= KeyFilterFlags::TYPE
+        }
+        if self.key_usage.is_some() {
+            flags |= KeyFilterFlags::USAGE
+        }
+        if self.key_label.is_some() {
+            flags |= KeyFilterFlags::LABEL
+        }
+        if self.key_id.is_some() {
+            flags |= KeyFilterFlags::ID
+        }
+
+        encoder.write_u32(flags.bits());
+        encoder.write_u32(self.key_type.map_or(0, |val| val as u32));
+        encoder.write_u32(self.key_usage.map_or(0, |val| val as u32));
+        encoder.write_str(self.key_label.unwrap_or(""));
+        encoder.write_u32(self.key_id.unwrap_or(0));
+
         encoder.bytes()
     }
 }
@@ -147,7 +187,13 @@ pub fn usb_decode_response<T: KmDecode<T>>(
         }
     }
 
-    let decoded = T::decode(&payload_bytes)?;
+    let mut decoder = Decoder::new(payload_bytes);
+    let decoded = T::decode(&mut decoder)?;
+
+    if !decoder.is_empty() {
+        return Err(EnigmaError::Protocol(DecodeError::UnexpectedPayload));
+    }
+
     Ok(decoded)
 }
 

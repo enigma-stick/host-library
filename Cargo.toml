@@ -7,4 +7,5 @@ edition = "2024"
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
+bitflags = "2.13.2"
 rusb = "0.9.4"

@@ -49,8 +49,7 @@ pub struct Status {
 }
 
 impl KmDecode<Status> for Status {
-    fn decode(payload: &[u8]) -> Result<Self, DecodeError> {
-        let mut decoder = Decoder::new(payload);
+    fn decode(decoder: &mut Decoder) -> Result<Self, DecodeError> {
         let token = TokenState::try_from(decoder.read_u32()?)?;
         let session = SessionState::try_from(decoder.read_u32()?)?;
 

@@ -53,6 +53,10 @@ impl<'a> Decoder<'a> {
         let result = str::from_utf8(str_bytes).map_err(|_| DecodeError::InvalidUtf8)?;
         Ok(result)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.position == self.bytes.len()
+    }
 }
 
 impl Encoder {

@@ -74,6 +74,7 @@ pub enum DecodeError {
     InvalidTokenState(u32),
     InvalidSessionState(u32),
     InvalidUtf8,
+    InvalidArgument,
 }
 
 impl Display for DecodeError {
@@ -96,6 +97,7 @@ impl Display for DecodeError {
                 write!(f, "Invalid session state: {:02X}", s)
             }
             Self::InvalidUtf8 => f.write_str("Invalid UTF-8"),
+            Self::InvalidArgument => f.write_str("Invalid argument"),
         }
     }
 }
@@ -144,6 +146,7 @@ pub enum EnigmaError {
     MissingInterface { interface: u8, alternate: u8 },
     MissingBulkEndpoint(u8),
     InvalidArgument,
+    MalformedOutput,
 }
 
 impl From<DecodeError> for EnigmaError {
@@ -178,6 +181,7 @@ impl Display for EnigmaError {
                 write!(f, "Missing bulk endpoint: {:02X}", endpoint)
             }
             Self::InvalidArgument => f.write_str("Invalid argument"),
+            Self::MalformedOutput => f.write_str("Malformed output"),
         }
     }
 }

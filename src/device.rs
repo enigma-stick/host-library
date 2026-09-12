@@ -1,5 +1,6 @@
+use crate::key::KeyList;
 use crate::protocol::{
-    AuthenticateRequest, EmptyRequest, KmCommand, KmDecode, KmEncode, KmFrameHeader,
+    AuthenticateRequest, EmptyRequest, KeyListFilter, KmCommand, KmDecode, KmEncode, KmFrameHeader,
     usb_decode_response, usb_encode_request,
 };
 use crate::{
@@ -165,6 +166,10 @@ impl Device {
 
     pub fn lock(&mut self) -> Result<(), EnigmaError> {
         self.transact(KmCommand::Lock, EmptyRequest {})
+    }
+
+    pub fn list_keys(&mut self, filter: KeyListFilter<'_>) -> Result<KeyList, EnigmaError> {
+        self.transact(KmCommand::ListKeys, filter)
     }
 
     pub fn close(&mut self) -> Result<(), EnigmaError> {

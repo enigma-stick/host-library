@@ -42,6 +42,31 @@ typedef struct {
   uint32_t session_state; /**< Secure session state */
 } enigma_status_info;
 
+typedef uint32_t enigma_key_type;
+#define enigma_key_type_aes 0x01
+#define enigma_key_type_rsa 0x02
+#define enigma_key_type_ec 0x03
+#define enigma_key_type_hmac 0x04
+
+typedef uint32_t enigma_key_usage;
+#define enigma_key_usage_encrypt 0x01
+#define enigma_key_usage_sign 0x02
+#define enigma_key_usage_derive 0x03
+
+typedef struct {
+  uint32_t id;
+  enigma_key_type type;
+  enigma_key_usage usage;
+  uint16_t size;
+  const char *label;
+  uint32_t created_at;
+} enigma_key_meta;
+
+typedef struct {
+  uint32_t count;
+  const enigma_key_meta *keys;
+} enigma_key_list;
+
 /**
  *  @brief Open a connection to the Enigma device
  *
@@ -97,6 +122,15 @@ enigma_result enigma_authenticate(enigma_device *device, const char *pin,
  *  @retval code Error code
  */
 enigma_result enigma_lock(enigma_device *device, enigma_error *error);
+
+enigma_result enigma_list_keys(enigma_device *device,
+                               const enigma_key_type *filter_type,
+                               const enigma_key_usage *filter_usage,
+                               const char *filter_label,
+                               const uint32_t *filter_key_id,
+                               enigma_key_list **key_list, enigma_error *error);
+
+void enigma_key_list_free(const enigma_key_list *list);
 
 /**
  *  @brief Close device
