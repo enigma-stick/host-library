@@ -54,3 +54,33 @@ impl<'a> Decoder<'a> {
         Ok(result)
     }
 }
+
+impl Encoder {
+    pub fn new() -> Self {
+        Self { bytes: vec![] }
+    }
+
+    pub fn write_u8(&mut self, data: u8) {
+        self.bytes.push(data)
+    }
+
+    pub fn write_u16(&mut self, data: u16) {
+        let mut bytes = data.to_be_bytes().to_vec();
+        self.bytes.append(&mut bytes);
+    }
+
+    pub fn write_u32(&mut self, data: u32) {
+        let mut bytes = data.to_be_bytes().to_vec();
+        self.bytes.append(&mut bytes);
+    }
+
+    pub fn write_str(&mut self, data: &str) {
+        let str_len = data.len();
+        self.write_u32(str_len as u32);
+        self.bytes.extend_from_slice(data.as_bytes());
+    }
+
+    pub fn bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}

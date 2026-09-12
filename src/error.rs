@@ -67,6 +67,7 @@ impl Display for DeviceErrorCode {
 pub enum DecodeError {
     TruncatedHeader,
     TruncatedPayload,
+    UnexpectedPayload,
     InvalidMagic,
     UnsupportedVersion(u8),
     UnexpectedResponse(u8),
@@ -80,6 +81,7 @@ impl Display for DecodeError {
         match self {
             Self::TruncatedHeader => f.write_str("Truncated header"),
             Self::TruncatedPayload => f.write_str("Truncated payload"),
+            Self::UnexpectedPayload => f.write_str("Unexpected payload"),
             Self::InvalidMagic => f.write_str("Invalid header magic"),
             Self::UnsupportedVersion(v) => {
                 write!(f, "Unsupported version: {:02X}", v)
@@ -141,6 +143,7 @@ pub enum EnigmaError {
     MultipleDevicesFound,
     MissingInterface { interface: u8, alternate: u8 },
     MissingBulkEndpoint(u8),
+    InvalidArgument,
 }
 
 impl From<DecodeError> for EnigmaError {
@@ -174,6 +177,7 @@ impl Display for EnigmaError {
             Self::MissingBulkEndpoint(endpoint) => {
                 write!(f, "Missing bulk endpoint: {:02X}", endpoint)
             }
+            Self::InvalidArgument => f.write_str("Invalid argument"),
         }
     }
 }

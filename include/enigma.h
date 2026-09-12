@@ -71,9 +71,25 @@ enigma_result enigma_status(enigma_device *device, enigma_status_info *status,
                             enigma_error *error);
 
 /**
+ *  @brief Authenticate the device token
+ *
+ *  Authenticating the token unlocks it globally. Cryptographic operations
+ *  require the token to be authenticated
+ *
+ *  @paran[in] device Device handle
+ *  @param[in] pin Device authentication PIN
+ *  @param[out] error NULL or error if status could not be retrieved
+ *  @retval code Error code
+ */
+enigma_result enigma_authenticate(enigma_device *device, const char *pin,
+                                  enigma_error *error);
+
+/**
  *  @brief Close device
  *
  *  Close the USB connection and release the handle back to the kernel.
+ *  The device handle may be null in this case, where nothing will actually
+ *  happen, but no errors will result.
  *
  *  @param[in] device Device handle
  *  @param[out] error NULL or error if device could not be cleanly closed

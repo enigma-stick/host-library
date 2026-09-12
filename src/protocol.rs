@@ -1,9 +1,19 @@
-use crate::codec::Decoder;
+use crate::codec::{Decoder, Encoder};
 use crate::error::{DecodeError, DeviceError, EnigmaError};
 
 #[derive(Clone, Copy, Debug)]
 pub enum KmCommand {
     Status = 0x02,
+    Authenticate = 0x11,
+}
+
+impl KmCommand {
+    fn expected_response(self) -> u8 {
+        match self {
+            Self::Status => 0x02,
+            Self::Authenticate => 0x00,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -73,6 +83,28 @@ impl KmEncode for EmptyRequest {
     }
 }
 
+impl KmDecode<()> for () {
+    fn decode(payload: &[u8]) -> Result<(), DecodeError> {
+        if payload.len() > 0 {
+            return Err(DecodeError::UnexpectedPayload);
+        }
+
+        Ok(())
+    }
+}
+
+pub struct AuthenticateRequest<'a> {
+    pub pin: &'a str,
+}
+
+impl KmEncode for AuthenticateRequest<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_str(self.pin);
+        encoder.bytes()
+    }
+}
+
 pub fn usb_encode_request<T: KmEncode>(command: KmCommand, request: T) -> Vec<u8> {
     let payload_bytes = request.encode();
     let payload_length = payload_bytes.len();
@@ -102,7 +134,7 @@ pub fn usb_decode_response<T: KmDecode<T>>(
     }
     let payload_bytes = &response[8..end];
 
-    if frame_header.command != expected as u8 {
+    if frame_header.command != expected.expected_response() as u8 {
         if frame_header.command == 0xFF {
             let decoded_error = DeviceError::decode(&payload_bytes)?;
             return Err(EnigmaError::Device(decoded_error));
@@ -120,7 +152,128 @@ pub fn usb_decode_response<T: KmDecode<T>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::DeviceErrorCode;
     use crate::status::Status;
+
+    // Golden frames follow firmware commands.c, serial.c, and usb_transport.c.
+    // PINs below are dummy test data, never credentials from a real device.
+    #[test]
+    fn it_encodes_an_authentication_request() {
+        let bytes =
+            usb_encode_request(KmCommand::Authenticate, AuthenticateRequest { pin: "1234" });
+
+        assert_eq!(
+            bytes,
+            [
+                0x4B, 0x4D, 0x47, 0x52, // KMGR
+                0x01, 0x11, 0x00, 0x08, // version, command, payload length
+                0x00, 0x00, 0x00, 0x04, // PIN byte length (u32 big-endian)
+                0x31, 0x32, 0x33, 0x34, // PIN bytes, without a NUL terminator
+            ]
+        );
+    }
+
+    #[test]
+    fn it_encodes_pin_length_in_bytes_not_characters() {
+        let bytes = usb_encode_request(KmCommand::Authenticate, AuthenticateRequest { pin: "é" });
+
+        assert_eq!(
+            bytes,
+            [
+                0x4B, 0x4D, 0x47, 0x52, 0x01, 0x11, 0x00, 0x06, 0x00, 0x00, 0x00,
+                0x02, // One character, two UTF-8 bytes
+                0xC3, 0xA9,
+            ]
+        );
+    }
+
+    #[test]
+    fn it_decodes_an_empty_authentication_success() {
+        let bytes = [0x4B, 0x4D, 0x47, 0x52, 0x01, 0x00, 0x00, 0x00];
+
+        usb_decode_response::<()>(KmCommand::Authenticate, &bytes)
+            .expect("authentication succeeds with response 0x00 and no payload");
+    }
+
+    #[test]
+    fn it_rejects_a_nonempty_authentication_success() {
+        let bytes = [0x4B, 0x4D, 0x47, 0x52, 0x01, 0x00, 0x00, 0x01, 0x42];
+        let result = usb_decode_response::<()>(KmCommand::Authenticate, &bytes);
+
+        assert!(
+            matches!(
+                result,
+                Err(EnigmaError::Protocol(DecodeError::UnexpectedPayload))
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn it_rejects_a_status_response_during_authentication() {
+        let bytes = [
+            0x4B, 0x4D, 0x47, 0x52, 0x01, 0x02, 0x00, 0x08, 0x00, 0x00, 0x00, 0x02, // Ready
+            0x00, 0x00, 0x00, 0x01, // Authenticated
+        ];
+        let result = usb_decode_response::<()>(KmCommand::Authenticate, &bytes);
+
+        assert!(
+            matches!(
+                result,
+                Err(EnigmaError::Protocol(DecodeError::UnexpectedResponse(0x02)))
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn it_rejects_an_authentication_command_id_as_a_success_response() {
+        let bytes = [0x4B, 0x4D, 0x47, 0x52, 0x01, 0x11, 0x00, 0x00];
+        let result = usb_decode_response::<()>(KmCommand::Authenticate, &bytes);
+
+        assert!(
+            matches!(
+                result,
+                Err(EnigmaError::Protocol(DecodeError::UnexpectedResponse(0x11)))
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn it_rejects_a_generic_ok_response_for_status() {
+        let bytes = [0x4B, 0x4D, 0x47, 0x52, 0x01, 0x00, 0x00, 0x00];
+        let result = usb_decode_response::<Status>(KmCommand::Status, &bytes);
+
+        assert!(
+            matches!(
+                result,
+                Err(EnigmaError::Protocol(DecodeError::UnexpectedResponse(0x00)))
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn it_decodes_a_device_error_during_authentication() {
+        let bytes = [
+            0x4B, 0x4D, 0x47, 0x52, 0x01, 0xFF, 0x00, 0x09, 0x02, // Authentication failed
+            0x00, 0x00, 0x00, 0x04, // Message byte length
+            b'b', b'a', b'd', b'!',
+        ];
+        let result = usb_decode_response::<()>(KmCommand::Authenticate, &bytes);
+
+        assert!(
+            matches!(
+                &result,
+                Err(EnigmaError::Device(DeviceError {
+                    code: DeviceErrorCode::AuthFailed,
+                    message,
+                })) if message == "bad!"
+            ),
+            "{result:?}"
+        );
+    }
 
     #[test]
     fn it_encodes() {

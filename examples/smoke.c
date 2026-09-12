@@ -3,6 +3,7 @@
 
 int main(void) {
 
+  int exit = 0;
   enigma_device *device;
   enigma_error error = {0};
 
@@ -12,22 +13,31 @@ int main(void) {
     return 1;
   }
 
+  res = enigma_authenticate(device, "password", &error);
+  if (res != ENIGMA_OK) {
+    printf("Could not authenticate (%02x) - %s\n", res, error.message);
+    exit = 1;
+    goto cleanup;
+  }
+
   enigma_status_info status = {0};
   res = enigma_status(device, &status, &error);
   if (res != ENIGMA_OK) {
     printf("Could not get device status (%02x) - %s\n", res, error.message);
-    return 1;
+    exit = 1;
+    goto cleanup;
   }
 
   printf("== Device status ==\n");
   printf("  Token: %u\n", status.token_state);
   printf("  Session: %u\n", status.session_state);
 
+cleanup:
   res = enigma_close(device, &error);
   if (res != ENIGMA_OK) {
     printf("Could not close device (%02x) - %s\n", res, error.message);
     return 1;
   }
 
-  return 0;
+  return exit;
 }

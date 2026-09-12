@@ -1,6 +1,9 @@
-use std::{ffi::c_char, ptr};
+use std::{
+    ffi::{CStr, c_char},
+    ptr,
+};
 
-use crate::Device;
+use crate::{Device, EnigmaError};
 
 const ENIGMA_OK: i32 = 0x00;
 const ENIGMA_INVALID_ARG: i32 = 0x01;
@@ -54,6 +57,7 @@ impl EnigmaErrorInfo {
             crate::EnigmaError::Usb(_) => ENIGMA_USB_ERROR,
             crate::EnigmaError::Protocol(_) => ENIGMA_PROTOCOL_ERROR,
             crate::EnigmaError::Device(_) => ENIGMA_DEVICE_ERROR,
+            crate::EnigmaError::InvalidArgument => ENIGMA_INVALID_ARG,
         };
 
         info.device_code = match error {
@@ -204,6 +208,68 @@ pub unsafe extern "C" fn enigma_status(
     }
 
     ENIGMA_OK
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_authenticate(
+    in_device: *mut EnigmaDevice,
+    in_pin: *const c_char,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null() || in_pin.is_null() {
+        if !out_error.is_null() {
+            let mut err = EnigmaErrorInfo::empty();
+            err.code = ENIGMA_INVALID_ARG;
+            unsafe {
+                out_error.write(err);
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let device = unsafe { &mut *in_device };
+        let c_pin = unsafe { CStr::from_ptr(in_pin) };
+        let pin = c_pin
+            .to_str()
+            .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument))?;
+
+        device
+            .device
+            .authenticate(pin)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))
+    });
+
+    match outcome {
+        Ok(Ok(_)) => {
+            if !out_error.is_null() {
+                unsafe {
+                    out_error.write(EnigmaErrorInfo::empty());
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            return code;
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                let mut err = EnigmaErrorInfo::empty();
+                err.code = ENIGMA_INTERNAL_ERROR;
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            return ENIGMA_INTERNAL_ERROR;
+        }
+    }
 }
 
 #[unsafe(no_mangle)]

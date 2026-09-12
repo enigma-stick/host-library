@@ -1,6 +1,6 @@
 use crate::protocol::{
-    EmptyRequest, KmCommand, KmDecode, KmEncode, KmFrameHeader, usb_decode_response,
-    usb_encode_request,
+    AuthenticateRequest, EmptyRequest, KmCommand, KmDecode, KmEncode, KmFrameHeader,
+    usb_decode_response, usb_encode_request,
 };
 use crate::{
     EnigmaError::{self, Usb},
@@ -152,6 +152,15 @@ impl Device {
 
     pub fn status(&mut self) -> Result<Status, EnigmaError> {
         self.transact(KmCommand::Status, EmptyRequest {})
+    }
+
+    pub fn authenticate(&mut self, pin: &str) -> Result<(), EnigmaError> {
+        if pin.is_empty() || pin.as_bytes().contains(&0) || pin.len() > 1020 {
+            return Err(EnigmaError::InvalidArgument);
+        }
+
+        let request = AuthenticateRequest { pin };
+        self.transact(KmCommand::Authenticate, request)
     }
 
     pub fn close(&mut self) -> Result<(), EnigmaError> {
