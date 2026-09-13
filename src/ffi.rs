@@ -371,7 +371,7 @@ pub unsafe extern "C" fn enigma_export_public_key(
         }
     }
 
-    if in_device.is_null() {
+    if in_device.is_null() || out_public_key_len.is_null() {
         if !out_error.is_null() {
             let mut err = EnigmaErrorInfo::empty();
             err.code = ENIGMA_INVALID_ARG;

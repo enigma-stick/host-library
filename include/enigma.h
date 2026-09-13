@@ -25,8 +25,8 @@ typedef int32_t enigma_result;
 #define ENIGMA_PROTOCOL_ERROR 0x06
 #define ENIGMA_DEVICE_ERROR 0x07
 #define ENIGMA_INTERNAL_ERROR 0x08
-#define ENIGMA_MALFORMED_OUTPUT 0x09;
-#define ENIGMA_BUFFER_TOO_SMALL 0x0A;
+#define ENIGMA_MALFORMED_OUTPUT 0x09
+#define ENIGMA_BUFFER_TOO_SMALL 0x0A
 
 /**
  *  @brief Rich library error information
