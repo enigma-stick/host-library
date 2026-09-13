@@ -88,10 +88,59 @@ pub struct KeyList {
     pub keys: Vec<KeyMeta>,
 }
 
+pub struct PublicKey {
+    pub encoding: u32,
+    pub public_key: Box<[u8]>,
+}
+
+impl KmDecode<PublicKey> for PublicKey {
+    fn decode(decoder: &mut Decoder) -> Result<PublicKey, DecodeError> {
+        let encoding = decoder.read_u32()?;
+        let public_key_len = decoder.read_u32()?;
+        let bytes = decoder.read_bytes(public_key_len as usize)?.to_vec();
+        let public_key = bytes.into_boxed_slice();
+
+        Ok(Self {
+            encoding,
+            public_key,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol::{KeyListFilter, KmCommand, KmEncode, usb_decode_response};
+
+    #[test]
+    fn public_key_decode_owns_binary_bytes() {
+        // Synthetic bytes exercise framing, not ASN.1/SPKI validation.
+        let key = {
+            let payload = vec![0, 0, 0, 1, 0, 0, 0, 4, 0x30, 0, 0x80, 0xFF];
+            PublicKey::decode(&mut Decoder::new(&payload)).unwrap()
+        };
+        assert_eq!(key.encoding, 1);
+        assert_eq!(&*key.public_key, &[0x30, 0, 0x80, 0xFF]);
+    }
+
+    #[test]
+    fn public_key_rejects_truncation_and_impossible_byte_count() {
+        let payload = [0, 0, 0, 1, 0, 0, 0, 4, 0x30, 0, 0x80, 0xFF];
+        for end in 0..payload.len() {
+            assert!(
+                matches!(
+                    PublicKey::decode(&mut Decoder::new(&payload[..end])),
+                    Err(DecodeError::TruncatedPayload)
+                ),
+                "prefix length {end}"
+            );
+        }
+        let payload = [0, 0, 0, 1, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(matches!(
+            PublicKey::decode(&mut Decoder::new(&payload)),
+            Err(DecodeError::TruncatedPayload)
+        ));
+    }
 
     // Firmware commands.c: count, then id/type/usage/size/label/created_at.
     // Independent golden bytes, not produced by the host encoder.

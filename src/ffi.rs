@@ -15,6 +15,7 @@ const ENIGMA_PROTOCOL_ERROR: i32 = 0x06;
 const ENIGMA_DEVICE_ERROR: i32 = 0x07;
 const ENIGMA_INTERNAL_ERROR: i32 = 0x08;
 const ENIGMA_MALFORMED_OUTPUT: i32 = 0x09;
+const ENIGMA_BUFFER_TOO_SMALL: i32 = 0x0A;
 
 #[derive(Debug)]
 #[repr(C)]
@@ -83,6 +84,7 @@ impl EnigmaErrorInfo {
             crate::EnigmaError::Device(_) => ENIGMA_DEVICE_ERROR,
             crate::EnigmaError::InvalidArgument => ENIGMA_INVALID_ARG,
             crate::EnigmaError::MalformedOutput => ENIGMA_MALFORMED_OUTPUT,
+            crate::EnigmaError::BufferTooSmall => ENIGMA_BUFFER_TOO_SMALL,
         };
 
         info.device_code = match error {
@@ -355,6 +357,106 @@ pub unsafe extern "C" fn enigma_lock(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_export_public_key(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    out_public_key: *mut u8,
+    in_capacity: usize,
+    out_public_key_len: *mut usize,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if !out_public_key_len.is_null() {
+        unsafe {
+            out_public_key_len.write(0);
+        }
+    }
+
+    if in_device.is_null() {
+        if !out_error.is_null() {
+            let mut err = EnigmaErrorInfo::empty();
+            err.code = ENIGMA_INVALID_ARG;
+            unsafe {
+                out_error.write(err);
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    if out_public_key.is_null() && in_capacity > 0 {
+        if !out_error.is_null() {
+            let mut err = EnigmaErrorInfo::empty();
+            err.code = ENIGMA_INVALID_ARG;
+            unsafe {
+                out_error.write(err);
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let device = unsafe { &mut *in_device };
+
+        let result = device
+            .device
+            .get_public_key(in_key_id)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err));
+
+        result
+    });
+
+    match outcome {
+        Ok(Ok(result)) => {
+            let len = result.public_key.len();
+
+            if len > in_capacity {
+                unsafe {
+                    out_public_key_len.write(len);
+                    if !out_error.is_null() {
+                        out_error.write(EnigmaErrorInfo::from_error(&EnigmaError::BufferTooSmall));
+                    }
+                }
+                return ENIGMA_BUFFER_TOO_SMALL;
+            }
+
+            unsafe {
+                if !out_public_key.is_null() {
+                    result.public_key.as_ptr().copy_to(out_public_key, len);
+                }
+                out_public_key_len.write(len);
+
+                if !out_error.is_null() {
+                    out_error.write(EnigmaErrorInfo::empty());
+                }
+            }
+
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            unsafe {
+                out_public_key_len.write(0);
+                if !out_error.is_null() {
+                    out_error.write(err);
+                }
+            }
+            code
+        }
+        Err(panic) => {
+            unsafe {
+                out_public_key_len.write(0);
+                if !out_error.is_null() {
+                    let mut err = EnigmaErrorInfo::empty();
+                    err.code = ENIGMA_INTERNAL_ERROR;
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn enigma_list_keys(
     in_device: *mut EnigmaDevice,
     in_filter_type: *const u32,
@@ -563,6 +665,27 @@ mod tests {
 
     use super::*;
     use crate::{DeviceError, DeviceErrorCode, EnigmaError};
+
+    #[test]
+    fn public_key_invalid_device_clears_length_and_preserves_buffer() {
+        let mut bytes = [0xAA; 8];
+        let mut len = 123;
+        let mut error = EnigmaErrorInfo::empty();
+        let code = unsafe {
+            enigma_export_public_key(
+                ptr::null_mut(),
+                1,
+                bytes.as_mut_ptr(),
+                bytes.len(),
+                &mut len,
+                &mut error,
+            )
+        };
+        assert_eq!(code, ENIGMA_INVALID_ARG);
+        assert_eq!(error.code, ENIGMA_INVALID_ARG);
+        assert_eq!(bytes, [0xAA; 8]);
+        assert_eq!(len, 0, "failed calls must not leave a stale output length");
+    }
 
     #[test]
     fn list_free_accepts_null() {

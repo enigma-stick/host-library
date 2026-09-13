@@ -1,32 +1,6 @@
 #include "../include/enigma.h"
 #include <stdio.h>
 
-const char *enigma_key_type_str(enigma_key_type type) {
-  switch (type) {
-  case enigma_key_type_aes:
-    return "AES";
-  case enigma_key_type_rsa:
-    return "RSA";
-  case enigma_key_type_ec:
-    return "EC";
-  case enigma_key_type_hmac:
-    return "HMAC";
-  }
-  return "<?>";
-}
-
-const char *enigma_key_usage_str(enigma_key_usage usage) {
-  switch (usage) {
-  case enigma_key_usage_encrypt:
-    return "ENCRYPT";
-  case enigma_key_usage_sign:
-    return "SIGN";
-  case enigma_key_usage_derive:
-    return "DERIVE";
-  }
-  return "<?>";
-}
-
 int main(void) {
 
   int exit = 0;
@@ -39,28 +13,36 @@ int main(void) {
     return 1;
   }
 
-  enigma_key_list *key_list;
-  enigma_key_type filter_type = enigma_key_type_ec;
-  enigma_key_usage filter_usage = enigma_key_usage_sign;
-  res = enigma_list_keys(device, &filter_type, &filter_usage, NULL, NULL,
-                         &key_list, &error);
+  res = enigma_authenticate(device, "password", &error);
   if (res != ENIGMA_OK) {
-    printf("Could not list keys (%02x) - %s\n", res, error.message);
+    printf("Could not open device (%02x) - %s\n", res, error.message);
     exit = 1;
     goto cleanup;
   }
 
-  for (uint32_t i = 0; i < key_list->count; i++) {
-    enigma_key_meta key = key_list->keys[i];
-    printf("KEY 0x%08X\n", key.id);
-    printf("  Type: %s\n", enigma_key_type_str(key.type));
-    printf("  Usage: %s\n", enigma_key_usage_str(key.usage));
-    printf("  Size: %d\n", key.size);
-    printf("  Label: %s\n\n", key.label);
+  uint8_t buffer[512];
+  size_t pk_len = 0;
+  res = enigma_export_public_key(device, 0x4B4D1001, buffer, sizeof(buffer),
+                                 &pk_len, &error);
+  if (res != ENIGMA_OK) {
+    printf("Could not export public key (%02x) - %s\n", res, error.message);
+    exit = 1;
+    goto cleanup;
+  }
+
+  printf("Public Key Length: %lu\n", pk_len);
+  for (size_t i = 0; i < pk_len; i++) {
+    printf("%02X ", buffer[i]);
   }
 
 cleanup:
-  enigma_key_list_free(key_list);
+  res = enigma_lock(device, &error);
+  if (res != ENIGMA_OK) {
+    printf("Could not lock device (%02x) - %s\n", res, error.message);
+    enigma_close(device, &error);
+    return 1;
+  }
+
   res = enigma_close(device, &error);
   if (res != ENIGMA_OK) {
     printf("Could not close device (%02x) - %s\n", res, error.message);

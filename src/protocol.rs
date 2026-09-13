@@ -8,6 +8,7 @@ pub enum KmCommand {
     Status = 0x02,
     Authenticate = 0x11,
     Lock = 0x12,
+    GetPublicKey = 0x30,
     ListKeys = 0x40,
 }
 
@@ -17,6 +18,7 @@ impl KmCommand {
             Self::Status => 0x02,
             Self::Authenticate => 0x00,
             Self::Lock => 0x00,
+            Self::GetPublicKey => 0x30,
             Self::ListKeys => 0x40,
         }
     }
@@ -143,6 +145,19 @@ impl KmEncode for KeyListFilter<'_> {
         encoder.write_str(self.key_label.unwrap_or(""));
         encoder.write_u32(self.key_id.unwrap_or(0));
 
+        encoder.bytes()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct GetPublicKeyRequest {
+    pub key_id: u32,
+}
+
+impl KmEncode for GetPublicKeyRequest {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.key_id);
         encoder.bytes()
     }
 }

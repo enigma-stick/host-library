@@ -147,6 +147,7 @@ pub enum EnigmaError {
     MissingBulkEndpoint(u8),
     InvalidArgument,
     MalformedOutput,
+    BufferTooSmall,
 }
 
 impl From<DecodeError> for EnigmaError {
@@ -182,6 +183,7 @@ impl Display for EnigmaError {
             }
             Self::InvalidArgument => f.write_str("Invalid argument"),
             Self::MalformedOutput => f.write_str("Malformed output"),
+            Self::BufferTooSmall => f.write_str("Buffer too small"),
         }
     }
 }

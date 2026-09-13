@@ -54,6 +54,10 @@ impl<'a> Decoder<'a> {
         Ok(result)
     }
 
+    pub fn read_bytes(&mut self, count: usize) -> Result<&'a [u8], DecodeError> {
+        self.take(count)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.position == self.bytes.len()
     }

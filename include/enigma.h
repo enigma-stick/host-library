@@ -1,6 +1,7 @@
 #ifndef LIB_ENIGMA_H
 #define LIB_ENIGMA_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 /**
@@ -24,6 +25,8 @@ typedef int32_t enigma_result;
 #define ENIGMA_PROTOCOL_ERROR 0x06
 #define ENIGMA_DEVICE_ERROR 0x07
 #define ENIGMA_INTERNAL_ERROR 0x08
+#define ENIGMA_MALFORMED_OUTPUT 0x09;
+#define ENIGMA_BUFFER_TOO_SMALL 0x0A;
 
 /**
  *  @brief Rich library error information
@@ -123,6 +126,55 @@ enigma_result enigma_authenticate(enigma_device *device, const char *pin,
  */
 enigma_result enigma_lock(enigma_device *device, enigma_error *error);
 
+/**
+ *  @brief Get public key material
+ *
+ *  Keypairs are generated on the secure element but do not return the public
+ *  key as part of that operation. The returned `public_key` is formatted to
+ *  be SubjectPublicKeyInfo DER bytes.
+ *
+ *  Public key memory must be allocated by the caller, and the buffer size
+ *  passed in via `capacity`. If not enough memory was allocated, the error
+ *  code is ENIGMA_BUFFER_TOO_SMALL. When public_key = NULL and capacity = 0,
+ *  the library will return the necessary bytes to allocate in `public_key_len`.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_id Target key ID
+ *  @param[out] public_key Public key SPKI DER bytes
+ *  @param[in] capacity Public key buffer size
+ *  @param[out] public_key_len Public key byte count
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_export_public_key(enigma_device *device, uint32_t key_id,
+                                       uint8_t *public_key, size_t capacity,
+                                       size_t *public_key_len,
+                                       enigma_error *error);
+
+/**
+ *  @brief List available crypto keys on the device
+ *
+ *  Get a list of key metadata structures that represent available crypto keys
+ *  on the secure element. The `key_list` output is owned by the library and
+ *  may be freed via `enigma_key_list_free`.
+ *
+ *  The device will filter on key type, usage, label, and ID. If the ID is
+ *  provided, all other filters will be ignored, and the lookup will occur
+ *  by ID only. This fact is enforced on the device firmware itself. Other
+ *  filters are combined with AND logic. For example, providing type = EC and
+ *  usage = SIGN will only give back keys that are both EC keys and have signing
+ *  usage.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] filter_type Key type filter
+ *  @param[in] filter_usage Key usage filter
+ *  @param[in] filter_label Key label filter
+ *  @param[in] filter_key_id Key ID filter
+ *  @param[out] key_list List of key metadatas
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ *  @see enigma_key_list_free()
+ */
 enigma_result enigma_list_keys(enigma_device *device,
                                const enigma_key_type *filter_type,
                                const enigma_key_usage *filter_usage,
@@ -130,6 +182,15 @@ enigma_result enigma_list_keys(enigma_device *device,
                                const uint32_t *filter_key_id,
                                enigma_key_list **key_list, enigma_error *error);
 
+/**
+ *  @brief Free library allocated key list
+ *
+ *  A key list returned by `enigma_list_keys` is owned by the library and must
+ *  be free'd with this function.
+ *
+ *  @param[in] list Key list
+ *  @see enigma_list_keys()
+ */
 void enigma_key_list_free(const enigma_key_list *list);
 
 /**

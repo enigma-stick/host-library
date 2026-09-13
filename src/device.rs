@@ -1,7 +1,7 @@
-use crate::key::KeyList;
+use crate::key::{KeyList, PublicKey};
 use crate::protocol::{
-    AuthenticateRequest, EmptyRequest, KeyListFilter, KmCommand, KmDecode, KmEncode, KmFrameHeader,
-    usb_decode_response, usb_encode_request,
+    AuthenticateRequest, EmptyRequest, GetPublicKeyRequest, KeyListFilter, KmCommand, KmDecode,
+    KmEncode, KmFrameHeader, usb_decode_response, usb_encode_request,
 };
 use crate::{
     EnigmaError::{self, Usb},
@@ -166,6 +166,11 @@ impl Device {
 
     pub fn lock(&mut self) -> Result<(), EnigmaError> {
         self.transact(KmCommand::Lock, EmptyRequest {})
+    }
+
+    pub fn get_public_key(&mut self, key_id: u32) -> Result<PublicKey, EnigmaError> {
+        let request = GetPublicKeyRequest { key_id };
+        self.transact(KmCommand::GetPublicKey, request)
     }
 
     pub fn list_keys(&mut self, filter: KeyListFilter<'_>) -> Result<KeyList, EnigmaError> {
