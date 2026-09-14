@@ -366,6 +366,7 @@ pub unsafe extern "C" fn enigma_sign(
     in_message: *const u8,
     in_message_len: usize,
     out_signature: *mut u8,
+    in_capacity: usize,
     out_signature_len: *mut usize,
     out_error: *mut EnigmaErrorInfo,
 ) -> i32 {
@@ -402,7 +403,7 @@ pub unsafe extern "C" fn enigma_sign(
             .sign(request)
             .map_err(|err| EnigmaErrorInfo::from_error(&err))?;
 
-        if result.signature.len() > in_message_len {
+        if result.signature.len() > in_capacity {
             return Err(EnigmaErrorInfo::from_error(&EnigmaError::BufferTooSmall));
         }
 

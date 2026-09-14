@@ -43,7 +43,7 @@ int main(void) {
   uint8_t signature[512];
   size_t sign_len = 0;
   res = enigma_sign(device, KEY_ID, (uint8_t *)message, strlen(message),
-                    signature, &sign_len, &error);
+                    signature, sizeof(signature), &sign_len, &error);
   if (res != ENIGMA_OK) {
     printf("Could not sign message (%02x) - %s\n", res, error.message);
     exit = 1;

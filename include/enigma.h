@@ -139,14 +139,15 @@ enigma_result enigma_lock(enigma_device *device, enigma_error *error);
  *  @param[in] message Message to be signed
  *  @param[in] message_len Message buffer capacity
  *  @param[out] signature Resulting signature buffer (caller provided)
+ *  @param[in] capacity Signature buffer capacity
  *  @param[out] signature_len Signature buffer length
  *  @param[out] error NULL or error
  *  @retval code Error code
  */
 enigma_result enigma_sign(enigma_device *device, uint32_t key_id,
                           const uint8_t *message, size_t message_len,
-                          uint8_t *signature, size_t *signature_len,
-                          enigma_error *error);
+                          uint8_t *signature, size_t capacity,
+                          size_t *signature_len, enigma_error *error);
 
 /**
  *  @brief Get public key material
