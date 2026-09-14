@@ -106,10 +106,46 @@ impl KmDecode<PublicKey> for PublicKey {
         })
     }
 }
+pub struct Signature {
+    pub signature: Box<[u8]>,
+}
+
+impl KmDecode<Signature> for Signature {
+    fn decode(decoder: &mut Decoder) -> Result<Signature, DecodeError> {
+        let len = decoder.read_u32()?;
+        let bytes = decoder.read_bytes(len as usize)?.to_vec();
+        let signature = bytes.into_boxed_slice();
+
+        Ok(Self { signature })
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signature_decode_owns_binary_output() {
+        let signature = {
+            let bytes = vec![0, 0, 0, 4, 0x30, 0, 0x80, 0xFF];
+            Signature::decode(&mut Decoder::new(&bytes)).unwrap()
+        };
+        assert_eq!(&*signature.signature, &[0x30, 0, 0x80, 0xFF]);
+    }
+
+    #[test]
+    fn signature_decode_rejects_truncation() {
+        let bytes = [0, 0, 0, 4, 0x30, 0, 0x80, 0xFF];
+        for end in 0..bytes.len() {
+            assert!(
+                matches!(
+                    Signature::decode(&mut Decoder::new(&bytes[..end])),
+                    Err(DecodeError::TruncatedPayload)
+                ),
+                "prefix length {end}"
+            );
+        }
+    }
     use crate::protocol::{KeyListFilter, KmCommand, KmEncode, usb_decode_response};
 
     #[test]

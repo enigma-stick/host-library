@@ -68,10 +68,12 @@ impl Encoder {
         Self { bytes: vec![] }
     }
 
+    #[allow(dead_code)]
     pub fn write_u8(&mut self, data: u8) {
         self.bytes.push(data)
     }
 
+    #[allow(dead_code)]
     pub fn write_u16(&mut self, data: u16) {
         let mut bytes = data.to_be_bytes().to_vec();
         self.bytes.append(&mut bytes);
@@ -86,6 +88,11 @@ impl Encoder {
         let str_len = data.len();
         self.write_u32(str_len as u32);
         self.bytes.extend_from_slice(data.as_bytes());
+    }
+
+    pub fn write_bytes(&mut self, data: &[u8]) {
+        self.write_u32(data.len() as u32);
+        self.bytes.extend_from_slice(data);
     }
 
     pub fn bytes(self) -> Vec<u8> {

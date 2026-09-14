@@ -1,9 +1,12 @@
 use std::{
     ffi::{CStr, CString, c_char},
-    ptr,
+    ptr, slice,
 };
 
-use crate::{Device, EnigmaError, KeyType, KeyUsage, protocol::KeyListFilter};
+use crate::{
+    Device, EnigmaError, KeyType, KeyUsage,
+    protocol::{KeyListFilter, SignRequest},
+};
 
 const ENIGMA_OK: i32 = 0x00;
 const ENIGMA_INVALID_ARG: i32 = 0x01;
@@ -352,6 +355,92 @@ pub unsafe extern "C" fn enigma_lock(
             }
             std::mem::forget(panic);
             return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_sign(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    in_message: *const u8,
+    in_message_len: usize,
+    out_signature: *mut u8,
+    out_signature_len: *mut usize,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null()
+        || in_key_id == 0
+        || in_message.is_null()
+        || out_signature.is_null()
+        || out_signature_len.is_null()
+    {
+        if !out_error.is_null() {
+            unsafe {
+                out_error.write(EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument));
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    unsafe {
+        out_signature_len.write(0);
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let message = unsafe { slice::from_raw_parts(in_message, in_message_len) };
+
+        let request = SignRequest {
+            key_id: in_key_id,
+            message,
+        };
+
+        let device = unsafe { &mut *in_device };
+
+        let result = device
+            .device
+            .sign(request)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))?;
+
+        if result.signature.len() > in_message_len {
+            return Err(EnigmaErrorInfo::from_error(&EnigmaError::BufferTooSmall));
+        }
+
+        Ok(result)
+    });
+
+    match outcome {
+        Ok(Ok(result)) => {
+            let signature_len = result.signature.len();
+            unsafe {
+                result
+                    .signature
+                    .as_ptr()
+                    .copy_to(out_signature, signature_len);
+                out_signature_len.write(signature_len);
+                if !out_error.is_null() {
+                    out_error.write(EnigmaErrorInfo::empty());
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe { out_error.write(err) }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                unsafe {
+                    let mut err = EnigmaErrorInfo::empty();
+                    err.code = ENIGMA_INTERNAL_ERROR;
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            ENIGMA_INTERNAL_ERROR
         }
     }
 }

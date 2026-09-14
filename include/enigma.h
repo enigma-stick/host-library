@@ -127,6 +127,28 @@ enigma_result enigma_authenticate(enigma_device *device, const char *pin,
 enigma_result enigma_lock(enigma_device *device, enigma_error *error);
 
 /**
+ *  @brief Sign a message
+ *
+ *  Sign an arbitrary message with a SIGNING key. The firmware will reject
+ *  a key that does not have appropriate key usage. The `signature` buffer
+ *  is caller provided and must have enough capacity for the resulting
+ *  signature, or the function will fail.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_id Signing key ID
+ *  @param[in] message Message to be signed
+ *  @param[in] message_len Message buffer capacity
+ *  @param[out] signature Resulting signature buffer (caller provided)
+ *  @param[out] signature_len Signature buffer length
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_sign(enigma_device *device, uint32_t key_id,
+                          const uint8_t *message, size_t message_len,
+                          uint8_t *signature, size_t *signature_len,
+                          enigma_error *error);
+
+/**
  *  @brief Get public key material
  *
  *  Keypairs are generated on the secure element but do not return the public

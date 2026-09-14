@@ -8,6 +8,7 @@ pub enum KmCommand {
     Status = 0x02,
     Authenticate = 0x11,
     Lock = 0x12,
+    Sign = 0x23,
     GetPublicKey = 0x30,
     ListKeys = 0x40,
 }
@@ -18,6 +19,7 @@ impl KmCommand {
             Self::Status => 0x02,
             Self::Authenticate => 0x00,
             Self::Lock => 0x00,
+            Self::Sign => 0x23,
             Self::GetPublicKey => 0x30,
             Self::ListKeys => 0x40,
         }
@@ -162,6 +164,20 @@ impl KmEncode for GetPublicKeyRequest {
     }
 }
 
+pub struct SignRequest<'a> {
+    pub key_id: u32,
+    pub message: &'a [u8],
+}
+
+impl KmEncode for SignRequest<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.key_id);
+        encoder.write_bytes(self.message);
+        encoder.bytes()
+    }
+}
+
 pub fn usb_encode_request<T: KmEncode>(command: KmCommand, request: T) -> Vec<u8> {
     let payload_bytes = request.encode();
     let payload_length = payload_bytes.len();
@@ -215,6 +231,22 @@ pub fn usb_decode_response<T: KmDecode<T>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signing_request_matches_firmware_wire_order() {
+        let request = SignRequest {
+            key_id: 0x01020304,
+            message: &[0, 0x80, 0xFF],
+        };
+        assert_eq!(
+            usb_encode_request(KmCommand::Sign, request),
+            vec![
+                0x4B, 0x4D, 0x47, 0x52, 1, 0x23, 0, 11, 1, 2, 3, 4, // key id
+                0, 0, 0, 3, // message byte length
+                0, 0x80, 0xFF,
+            ]
+        );
+    }
     use crate::error::DeviceErrorCode;
     use crate::status::Status;
 
