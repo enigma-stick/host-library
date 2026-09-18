@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     Device, EnigmaError, KeyType, KeyUsage,
-    protocol::{KeyListFilter, SignRequest},
+    protocol::{KeyListFilter, SignRequest, VerifyRequest},
 };
 
 const ENIGMA_OK: i32 = 0x00;
@@ -421,6 +421,85 @@ pub unsafe extern "C" fn enigma_sign(
                 out_signature_len.write(signature_len);
                 if !out_error.is_null() {
                     out_error.write(EnigmaErrorInfo::empty());
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe { out_error.write(err) }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                unsafe {
+                    let mut err = EnigmaErrorInfo::empty();
+                    err.code = ENIGMA_INTERNAL_ERROR;
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            ENIGMA_INTERNAL_ERROR
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_verify(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    in_message: *const u8,
+    in_message_len: usize,
+    in_signature: *const u8,
+    in_signature_len: usize,
+    out_verified: *mut bool,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null()
+        || in_key_id == 0
+        || in_message.is_null()
+        || in_message_len == 0
+        || in_signature.is_null()
+        || in_signature_len == 0
+        || out_verified.is_null()
+    {
+        if !out_error.is_null() {
+            let mut err = EnigmaErrorInfo::empty();
+            err.code = ENIGMA_INVALID_ARG;
+            unsafe {
+                out_error.write(err);
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let message = unsafe { slice::from_raw_parts(in_message, in_message_len) };
+        let signature = unsafe { slice::from_raw_parts(in_signature, in_signature_len) };
+
+        let request = VerifyRequest {
+            key_id: in_key_id,
+            message,
+            signature,
+        };
+
+        let device = unsafe { &mut *in_device };
+
+        device
+            .device
+            .verify(request)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))
+    });
+
+    match outcome {
+        Ok(Ok(verified)) => {
+            unsafe {
+                out_verified.write(verified);
+                if !out_error.is_null() {
+                    let err = EnigmaErrorInfo::empty();
+                    out_error.write(err);
                 }
             }
             ENIGMA_OK

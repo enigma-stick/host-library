@@ -1,6 +1,7 @@
 #ifndef LIB_ENIGMA_H
 #define LIB_ENIGMA_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -148,6 +149,26 @@ enigma_result enigma_sign(enigma_device *device, uint32_t key_id,
                           const uint8_t *message, size_t message_len,
                           uint8_t *signature, size_t capacity,
                           size_t *signature_len, enigma_error *error);
+
+/**
+ *  @brief Verify an HMAC message
+ *
+ *  Verify a message and its MAC.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_id Signing key ID
+ *  @param[in] message Message to verify
+ *  @param[in] message_len Length of message
+ *  @param[in] signature MAC to verify
+ *  @param[in] signature_len MAC length
+ *  @param[out] verified Verification status of message and MAC
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_verify(enigma_device *device, uint32_t key_id,
+                            const uint8_t *message, size_t message_len,
+                            const uint8_t *signature, size_t signature_len,
+                            bool *verified, enigma_error *error);
 
 /**
  *  @brief Get public key material

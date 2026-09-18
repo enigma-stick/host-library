@@ -40,10 +40,7 @@ int main(void) {
   }
 
   enigma_key_list *key_list;
-  enigma_key_type filter_type = enigma_key_type_ec;
-  enigma_key_usage filter_usage = enigma_key_usage_sign;
-  res = enigma_list_keys(device, &filter_type, &filter_usage, NULL, NULL,
-                         &key_list, &error);
+  res = enigma_list_keys(device, NULL, NULL, NULL, NULL, &key_list, &error);
   if (res != ENIGMA_OK) {
     printf("Could not list keys (%02x) - %s\n", res, error.message);
     exit = 1;

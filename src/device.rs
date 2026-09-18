@@ -1,7 +1,7 @@
 use crate::key::{KeyList, PublicKey, Signature};
 use crate::protocol::{
     AuthenticateRequest, EmptyRequest, GetPublicKeyRequest, KeyListFilter, KmCommand, KmDecode,
-    KmEncode, KmFrameHeader, SignRequest, usb_decode_response, usb_encode_request,
+    KmEncode, KmFrameHeader, SignRequest, VerifyRequest, usb_decode_response, usb_encode_request,
 };
 use crate::{
     EnigmaError::{self, Usb},
@@ -170,6 +170,10 @@ impl Device {
 
     pub fn sign(&mut self, request: SignRequest) -> Result<Signature, EnigmaError> {
         self.transact(KmCommand::Sign, request)
+    }
+
+    pub fn verify(&mut self, request: VerifyRequest) -> Result<bool, EnigmaError> {
+        self.transact(KmCommand::Verify, request)
     }
 
     pub fn get_public_key(&mut self, key_id: u32) -> Result<PublicKey, EnigmaError> {

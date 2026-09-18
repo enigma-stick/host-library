@@ -9,6 +9,7 @@ pub enum KmCommand {
     Authenticate = 0x11,
     Lock = 0x12,
     Sign = 0x23,
+    Verify = 0x24,
     GetPublicKey = 0x30,
     ListKeys = 0x40,
 }
@@ -20,6 +21,7 @@ impl KmCommand {
             Self::Authenticate => 0x00,
             Self::Lock => 0x00,
             Self::Sign => 0x23,
+            Self::Verify => 0x24,
             Self::GetPublicKey => 0x30,
             Self::ListKeys => 0x40,
         }
@@ -103,6 +105,13 @@ impl KmDecode<()> for () {
     }
 }
 
+impl KmDecode<bool> for bool {
+    fn decode(decoder: &mut Decoder) -> Result<bool, DecodeError> {
+        let value = decoder.read_u8()?;
+        Ok(value != 0)
+    }
+}
+
 pub struct AuthenticateRequest<'a> {
     pub pin: &'a str,
 }
@@ -174,6 +183,22 @@ impl KmEncode for SignRequest<'_> {
         let mut encoder = Encoder::new();
         encoder.write_u32(self.key_id);
         encoder.write_bytes(self.message);
+        encoder.bytes()
+    }
+}
+
+pub struct VerifyRequest<'a> {
+    pub key_id: u32,
+    pub message: &'a [u8],
+    pub signature: &'a [u8],
+}
+
+impl KmEncode for VerifyRequest<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.key_id);
+        encoder.write_bytes(self.message);
+        encoder.write_bytes(self.signature);
         encoder.bytes()
     }
 }
