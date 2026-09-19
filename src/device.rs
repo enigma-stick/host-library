@@ -1,8 +1,12 @@
-use crate::key::{KeyList, PublicKey, Signature};
-use crate::protocol::{
-    AuthenticateRequest, EmptyRequest, GetPublicKeyRequest, KeyListFilter, KmCommand, KmDecode,
-    KmEncode, KmFrameHeader, SignRequest, VerifyRequest, usb_decode_response, usb_encode_request,
+use crate::codec::{KmDecode, KmEncode};
+use crate::crypto::{
+    DecryptRequest, EncryptDecryptResponse, EncryptRequest, SignRequest, Signature, VerifyRequest,
 };
+use crate::key::{GetPublicKeyRequest, KeyList, KeyListFilter, PublicKey};
+use crate::protocol::{
+    EmptyRequest, KmCommand, KmFrameHeader, usb_decode_response, usb_encode_request,
+};
+use crate::session::AuthenticateRequest;
 use crate::{
     EnigmaError::{self, Usb},
     Status,
@@ -166,6 +170,20 @@ impl Device {
 
     pub fn lock(&mut self) -> Result<(), EnigmaError> {
         self.transact(KmCommand::Lock, EmptyRequest {})
+    }
+
+    pub fn encrypt(
+        &mut self,
+        request: EncryptRequest,
+    ) -> Result<EncryptDecryptResponse, EnigmaError> {
+        self.transact(KmCommand::Encrypt, request)
+    }
+
+    pub fn decrypt(
+        &mut self,
+        request: DecryptRequest,
+    ) -> Result<EncryptDecryptResponse, EnigmaError> {
+        self.transact(KmCommand::Decrypt, request)
     }
 
     pub fn sign(&mut self, request: SignRequest) -> Result<Signature, EnigmaError> {

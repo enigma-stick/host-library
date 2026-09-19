@@ -128,6 +128,50 @@ enigma_result enigma_authenticate(enigma_device *device, const char *pin,
 enigma_result enigma_lock(enigma_device *device, enigma_error *error);
 
 /**
+ *  @brief Encrypt arbitrary data
+ *
+ *  Encrypt arbitrary plaintext with an ENCRYPT key. The firmware will reject
+ *  a key that does not have appropriate key usage. The `ciphertext` buffer
+ *  is caller provided and must have enough capacity for the resulting
+ *  ciphertext, or the function will fail.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_id Encryption key ID
+ *  @param[in] plaintext Plaintext to be encrypted
+ *  @param[in] plaintext_len Length of plaintext
+ *  @param[out] ciphertext Ciphertext buffer
+ *  @param[in] capacity Buffer capacity of given ciphertext
+ *  @param[out] ciphertext_len Actual length of ciphertext
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_encrypt(enigma_device *device, uint32_t key_id,
+                             const uint8_t *plaintext, size_t plaintext_len,
+                             uint8_t *ciphertext, size_t capacity,
+                             size_t *ciphertext_len, enigma_error *error);
+
+/**
+ *  @brief Decrypt data
+ *
+ *  Decrypt data that was encrypted on-device. The firmware will reject a key
+ *  that does not have appropriate key usage.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_id Encryption key ID
+ *  @param[in] ciphertext Ciphertext buffer
+ *  @param[in] ciphertext_len Length of ciphertext
+ *  @param[out] plaintext Plaintext to be decrypted
+ *  @param[in] capacity Buffer capacity of given plaintext
+ *  @param[out] plaintext_len Actual length of plaintext
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_decrypt(enigma_device *device, uint32_t key_id,
+                             const uint8_t *ciphertext, size_t ciphertext_len,
+                             uint8_t *plaintext, size_t capacity,
+                             size_t *plaintext_len, enigma_error *error);
+
+/**
  *  @brief Sign a message
  *
  *  Sign an arbitrary message with a SIGNING key. The firmware will reject

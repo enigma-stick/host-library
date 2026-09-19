@@ -2,10 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// #define KEY_ID 0x4B4D1001
-
-// HMAC key for testing verification
-#define KEY_ID 0x4B4D1002
+#define KEY_ID 0x4B4D1000
 
 int main(void) {
 
@@ -26,46 +23,34 @@ int main(void) {
     goto cleanup;
   }
 
-  // uint8_t buffer[512];
-  // size_t pk_len = 0;
-  // res = enigma_export_public_key(device, KEY_ID, buffer, sizeof(buffer),
-  //                                &pk_len, &error);
-  // if (res != ENIGMA_OK) {
-  //   printf("Could not export public key (%02x) - %s\n", res, error.message);
-  //   exit = 1;
-  //   goto cleanup;
-  // }
-  // printf("Exported public key\n");
-
-  // no error handling; don't just copy this
-  // FILE *file = fopen("public-key.der", "wb");
-  // fwrite(buffer, 1, pk_len, file);
-  // fclose(file);
-
-  const char *message = "This is the message to sign!";
-  uint8_t signature[512];
-  size_t sign_len = 0;
-  res = enigma_sign(device, KEY_ID, (uint8_t *)message, strlen(message),
-                    signature, sizeof(signature), &sign_len, &error);
+  const char *plaintext = "This is the message to encrypt!";
+  uint8_t ciphertext[512];
+  size_t cipher_len = 0;
+  res = enigma_encrypt(device, KEY_ID, (uint8_t *)plaintext, strlen(plaintext),
+                       ciphertext, sizeof(ciphertext), &cipher_len, &error);
   if (res != ENIGMA_OK) {
-    printf("Could not sign message (%02x) - %s\n", res, error.message);
+    printf("Could not encrypt message (%02x) - %s\n", res, error.message);
     exit = 1;
     goto cleanup;
   }
-  printf("Signed message\n");
+  printf("Encrypted message: %lu\n", cipher_len);
 
-  // no error handling; don't just copy this
-  // file = fopen("signature.bin", "wb");
-  // fwrite(signature, 1, sign_len, file);
-  // fclose(file);
-
-  bool verified = false;
-  res = enigma_verify(device, KEY_ID, (uint8_t *)message, strlen(message),
-                      signature, sign_len, &verified, &error);
-  printf("Verified: %s\n", verified ? "OK" : "Fail");
-  if (!verified) {
-    printf("Error: %s\n", error.message);
+  for (size_t i = 0; i < cipher_len; i++) {
+    printf("%02X ", ciphertext[i]);
   }
+  printf("\n");
+
+  uint8_t decrypt_res[512];
+  size_t decrypt_len = 0;
+  res = enigma_decrypt(device, KEY_ID, ciphertext, cipher_len, decrypt_res,
+                       sizeof(decrypt_res), &decrypt_len, &error);
+  if (res != ENIGMA_OK) {
+    printf("Could not decrypt message (%02x) - %s\n", res, error.message);
+    exit = 1;
+    goto cleanup;
+  }
+  decrypt_res[decrypt_len] = '\0';
+  printf("Decrypted message: %s\n", (char *)decrypt_res);
 
 cleanup:
   res = enigma_lock(device, &error);

@@ -5,7 +5,8 @@ use std::{
 
 use crate::{
     Device, EnigmaError, KeyType, KeyUsage,
-    protocol::{KeyListFilter, SignRequest, VerifyRequest},
+    crypto::{DecryptRequest, EncryptRequest, SignRequest, VerifyRequest},
+    key::KeyListFilter,
 };
 
 const ENIGMA_OK: i32 = 0x00;
@@ -355,6 +356,172 @@ pub unsafe extern "C" fn enigma_lock(
             }
             std::mem::forget(panic);
             return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_encrypt(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    in_plaintext: *const u8,
+    in_plaintext_len: usize,
+    out_ciphertext: *mut u8,
+    in_capacity: usize,
+    out_ciphertext_len: *mut usize,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null()
+        || in_key_id == 0
+        || in_plaintext.is_null()
+        || in_plaintext_len == 0
+        || in_capacity == 0
+        || out_ciphertext.is_null()
+        || out_ciphertext_len.is_null()
+    {
+        if !out_error.is_null() {
+            unsafe {
+                out_error.write(EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument));
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let plaintext = unsafe { slice::from_raw_parts(in_plaintext, in_plaintext_len) };
+
+        let request = EncryptRequest {
+            key_id: in_key_id,
+            plaintext,
+        };
+
+        let device = unsafe { &mut *in_device };
+
+        let result = device
+            .device
+            .encrypt(request)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))?;
+
+        if result.data.len() > in_capacity {
+            return Err(EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument));
+        }
+
+        Ok(result)
+    });
+
+    match outcome {
+        Ok(Ok(result)) => {
+            let len = result.data.len();
+            unsafe {
+                result.data.as_ptr().copy_to(out_ciphertext, len);
+                out_ciphertext_len.write(len);
+                if !out_error.is_null() {
+                    let err = EnigmaErrorInfo::empty();
+                    out_error.write(err);
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe { out_error.write(err) }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                unsafe {
+                    let mut err = EnigmaErrorInfo::empty();
+                    err.code = ENIGMA_INTERNAL_ERROR;
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            ENIGMA_INTERNAL_ERROR
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_decrypt(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    in_ciphertext: *const u8,
+    in_ciphertext_len: usize,
+    out_plaintext: *mut u8,
+    in_capacity: usize,
+    out_plaintext_len: *mut usize,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null()
+        || in_key_id == 0
+        || in_ciphertext.is_null()
+        || in_ciphertext_len == 0
+        || in_capacity == 0
+        || out_plaintext.is_null()
+        || out_plaintext_len.is_null()
+    {
+        if !out_error.is_null() {
+            unsafe {
+                out_error.write(EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument));
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let ciphertext = unsafe { slice::from_raw_parts(in_ciphertext, in_ciphertext_len) };
+
+        let request = DecryptRequest {
+            key_id: in_key_id,
+            ciphertext,
+        };
+
+        let device = unsafe { &mut *in_device };
+
+        let result = device
+            .device
+            .decrypt(request)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))?;
+
+        if result.data.len() > in_capacity {
+            return Err(EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument));
+        }
+
+        Ok(result)
+    });
+
+    match outcome {
+        Ok(Ok(result)) => {
+            let len = result.data.len();
+            unsafe {
+                result.data.as_ptr().copy_to(out_plaintext, len);
+                out_plaintext_len.write(len);
+                if !out_error.is_null() {
+                    let err = EnigmaErrorInfo::empty();
+                    out_error.write(err);
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe { out_error.write(err) }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                unsafe {
+                    let mut err = EnigmaErrorInfo::empty();
+                    err.code = ENIGMA_INTERNAL_ERROR;
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            ENIGMA_INTERNAL_ERROR
         }
     }
 }

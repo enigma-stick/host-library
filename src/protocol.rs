@@ -1,13 +1,13 @@
-use crate::codec::{Decoder, Encoder};
+use crate::codec::{Decoder, KmDecode, KmEncode};
 use crate::error::{DecodeError, DeviceError, EnigmaError};
-use crate::key::KeyFilterFlags;
-use crate::{KeyType, KeyUsage};
 
 #[derive(Clone, Copy, Debug)]
 pub enum KmCommand {
     Status = 0x02,
     Authenticate = 0x11,
     Lock = 0x12,
+    Encrypt = 0x21,
+    Decrypt = 0x22,
     Sign = 0x23,
     Verify = 0x24,
     GetPublicKey = 0x30,
@@ -20,6 +20,8 @@ impl KmCommand {
             Self::Status => 0x02,
             Self::Authenticate => 0x00,
             Self::Lock => 0x00,
+            Self::Encrypt => 0x21,
+            Self::Decrypt => 0x22,
             Self::Sign => 0x23,
             Self::Verify => 0x24,
             Self::GetPublicKey => 0x30,
@@ -80,14 +82,6 @@ impl KmFrameHeader {
     }
 }
 
-pub(crate) trait KmEncode {
-    fn encode(&self) -> Vec<u8>;
-}
-
-pub(crate) trait KmDecode<T> {
-    fn decode(decoder: &mut Decoder) -> Result<T, DecodeError>;
-}
-
 pub struct EmptyRequest {}
 impl KmEncode for EmptyRequest {
     fn encode(&self) -> Vec<u8> {
@@ -102,104 +96,6 @@ impl KmDecode<()> for () {
         }
 
         Ok(())
-    }
-}
-
-impl KmDecode<bool> for bool {
-    fn decode(decoder: &mut Decoder) -> Result<bool, DecodeError> {
-        let value = decoder.read_u8()?;
-        Ok(value != 0)
-    }
-}
-
-pub struct AuthenticateRequest<'a> {
-    pub pin: &'a str,
-}
-
-impl KmEncode for AuthenticateRequest<'_> {
-    fn encode(&self) -> Vec<u8> {
-        let mut encoder = Encoder::new();
-        encoder.write_str(self.pin);
-        encoder.bytes()
-    }
-}
-
-#[derive(Default)]
-pub struct KeyListFilter<'a> {
-    pub key_type: Option<KeyType>,
-    pub key_usage: Option<KeyUsage>,
-    pub key_label: Option<&'a str>,
-    pub key_id: Option<u32>,
-}
-
-impl KmEncode for KeyListFilter<'_> {
-    fn encode(&self) -> Vec<u8> {
-        let mut encoder = Encoder::new();
-
-        let mut flags = KeyFilterFlags::DEFAULT;
-        if self.key_type.is_some() {
-            flags |= KeyFilterFlags::TYPE
-        }
-        if self.key_usage.is_some() {
-            flags |= KeyFilterFlags::USAGE
-        }
-        if self.key_label.is_some() {
-            flags |= KeyFilterFlags::LABEL
-        }
-        if self.key_id.is_some() {
-            flags |= KeyFilterFlags::ID
-        }
-
-        encoder.write_u32(flags.bits());
-        encoder.write_u32(self.key_type.map_or(0, |val| val as u32));
-        encoder.write_u32(self.key_usage.map_or(0, |val| val as u32));
-        encoder.write_str(self.key_label.unwrap_or(""));
-        encoder.write_u32(self.key_id.unwrap_or(0));
-
-        encoder.bytes()
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct GetPublicKeyRequest {
-    pub key_id: u32,
-}
-
-impl KmEncode for GetPublicKeyRequest {
-    fn encode(&self) -> Vec<u8> {
-        let mut encoder = Encoder::new();
-        encoder.write_u32(self.key_id);
-        encoder.bytes()
-    }
-}
-
-pub struct SignRequest<'a> {
-    pub key_id: u32,
-    pub message: &'a [u8],
-}
-
-impl KmEncode for SignRequest<'_> {
-    fn encode(&self) -> Vec<u8> {
-        let mut encoder = Encoder::new();
-        encoder.write_u32(self.key_id);
-        encoder.write_bytes(self.message);
-        encoder.bytes()
-    }
-}
-
-pub struct VerifyRequest<'a> {
-    pub key_id: u32,
-    pub message: &'a [u8],
-    pub signature: &'a [u8],
-}
-
-impl KmEncode for VerifyRequest<'_> {
-    fn encode(&self) -> Vec<u8> {
-        let mut encoder = Encoder::new();
-        encoder.write_u32(self.key_id);
-        encoder.write_bytes(self.message);
-        encoder.write_bytes(self.signature);
-        encoder.bytes()
     }
 }
 
@@ -257,55 +153,8 @@ pub fn usb_decode_response<T: KmDecode<T>>(
 mod tests {
     use super::*;
 
-    #[test]
-    fn signing_request_matches_firmware_wire_order() {
-        let request = SignRequest {
-            key_id: 0x01020304,
-            message: &[0, 0x80, 0xFF],
-        };
-        assert_eq!(
-            usb_encode_request(KmCommand::Sign, request),
-            vec![
-                0x4B, 0x4D, 0x47, 0x52, 1, 0x23, 0, 11, 1, 2, 3, 4, // key id
-                0, 0, 0, 3, // message byte length
-                0, 0x80, 0xFF,
-            ]
-        );
-    }
     use crate::error::DeviceErrorCode;
     use crate::status::Status;
-
-    // Golden frames follow firmware commands.c, serial.c, and usb_transport.c.
-    // PINs below are dummy test data, never credentials from a real device.
-    #[test]
-    fn it_encodes_an_authentication_request() {
-        let bytes =
-            usb_encode_request(KmCommand::Authenticate, AuthenticateRequest { pin: "1234" });
-
-        assert_eq!(
-            bytes,
-            [
-                0x4B, 0x4D, 0x47, 0x52, // KMGR
-                0x01, 0x11, 0x00, 0x08, // version, command, payload length
-                0x00, 0x00, 0x00, 0x04, // PIN byte length (u32 big-endian)
-                0x31, 0x32, 0x33, 0x34, // PIN bytes, without a NUL terminator
-            ]
-        );
-    }
-
-    #[test]
-    fn it_encodes_pin_length_in_bytes_not_characters() {
-        let bytes = usb_encode_request(KmCommand::Authenticate, AuthenticateRequest { pin: "é" });
-
-        assert_eq!(
-            bytes,
-            [
-                0x4B, 0x4D, 0x47, 0x52, 0x01, 0x11, 0x00, 0x06, 0x00, 0x00, 0x00,
-                0x02, // One character, two UTF-8 bytes
-                0xC3, 0xA9,
-            ]
-        );
-    }
 
     #[test]
     fn it_decodes_an_empty_authentication_success() {

@@ -1,4 +1,7 @@
-use crate::{DecodeError, codec::Decoder, protocol::KmDecode};
+use crate::{
+    DecodeError,
+    codec::{Decoder, Encoder, KmDecode, KmEncode},
+};
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,17 +109,52 @@ impl KmDecode<PublicKey> for PublicKey {
         })
     }
 }
-pub struct Signature {
-    pub signature: Box<[u8]>,
+#[derive(Default)]
+pub struct KeyListFilter<'a> {
+    pub key_type: Option<KeyType>,
+    pub key_usage: Option<KeyUsage>,
+    pub key_label: Option<&'a str>,
+    pub key_id: Option<u32>,
 }
 
-impl KmDecode<Signature> for Signature {
-    fn decode(decoder: &mut Decoder) -> Result<Signature, DecodeError> {
-        let len = decoder.read_u32()?;
-        let bytes = decoder.read_bytes(len as usize)?.to_vec();
-        let signature = bytes.into_boxed_slice();
+impl KmEncode for KeyListFilter<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
 
-        Ok(Self { signature })
+        let mut flags = KeyFilterFlags::DEFAULT;
+        if self.key_type.is_some() {
+            flags |= KeyFilterFlags::TYPE
+        }
+        if self.key_usage.is_some() {
+            flags |= KeyFilterFlags::USAGE
+        }
+        if self.key_label.is_some() {
+            flags |= KeyFilterFlags::LABEL
+        }
+        if self.key_id.is_some() {
+            flags |= KeyFilterFlags::ID
+        }
+
+        encoder.write_u32(flags.bits());
+        encoder.write_u32(self.key_type.map_or(0, |val| val as u32));
+        encoder.write_u32(self.key_usage.map_or(0, |val| val as u32));
+        encoder.write_str(self.key_label.unwrap_or(""));
+        encoder.write_u32(self.key_id.unwrap_or(0));
+
+        encoder.bytes()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct GetPublicKeyRequest {
+    pub key_id: u32,
+}
+
+impl KmEncode for GetPublicKeyRequest {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.key_id);
+        encoder.bytes()
     }
 }
 
@@ -124,29 +162,7 @@ impl KmDecode<Signature> for Signature {
 mod tests {
     use super::*;
 
-    #[test]
-    fn signature_decode_owns_binary_output() {
-        let signature = {
-            let bytes = vec![0, 0, 0, 4, 0x30, 0, 0x80, 0xFF];
-            Signature::decode(&mut Decoder::new(&bytes)).unwrap()
-        };
-        assert_eq!(&*signature.signature, &[0x30, 0, 0x80, 0xFF]);
-    }
-
-    #[test]
-    fn signature_decode_rejects_truncation() {
-        let bytes = [0, 0, 0, 4, 0x30, 0, 0x80, 0xFF];
-        for end in 0..bytes.len() {
-            assert!(
-                matches!(
-                    Signature::decode(&mut Decoder::new(&bytes[..end])),
-                    Err(DecodeError::TruncatedPayload)
-                ),
-                "prefix length {end}"
-            );
-        }
-    }
-    use crate::protocol::{KeyListFilter, KmCommand, KmEncode, usb_decode_response};
+    use crate::protocol::{KmCommand, usb_decode_response};
 
     #[test]
     fn public_key_decode_owns_binary_bytes() {

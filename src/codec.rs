@@ -1,5 +1,20 @@
 use crate::error::DecodeError;
 
+pub(crate) trait KmEncode {
+    fn encode(&self) -> Vec<u8>;
+}
+
+pub(crate) trait KmDecode<T> {
+    fn decode(decoder: &mut Decoder) -> Result<T, DecodeError>;
+}
+
+impl KmDecode<bool> for bool {
+    fn decode(decoder: &mut Decoder) -> Result<bool, DecodeError> {
+        let value = decoder.read_u8()?;
+        Ok(value != 0)
+    }
+}
+
 pub(crate) struct Decoder<'a> {
     bytes: &'a [u8],
     position: usize,

@@ -1,6 +1,5 @@
-use crate::codec::Decoder;
+use crate::codec::{Decoder, KmDecode};
 use crate::error::DecodeError;
-use crate::protocol::KmDecode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenState {

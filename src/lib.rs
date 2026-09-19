@@ -1,9 +1,11 @@
 mod codec;
+mod crypto;
 mod device;
 mod error;
 mod ffi;
 mod key;
 mod protocol;
+mod session;
 mod status;
 
 pub use device::Device;
