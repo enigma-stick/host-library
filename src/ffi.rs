@@ -1,12 +1,13 @@
 use std::{
     ffi::{CStr, CString, c_char},
     ptr, slice,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
     Device, EnigmaError, KeyType, KeyUsage,
     crypto::{DecryptRequest, EncryptRequest, SignRequest, VerifyRequest},
-    key::KeyListFilter,
+    key::{GenerateKeyRequest, KeyListFilter},
 };
 
 const ENIGMA_OK: i32 = 0x00;
@@ -337,6 +338,94 @@ pub unsafe extern "C" fn enigma_lock(
             }
             ENIGMA_OK
         }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                let mut err = EnigmaErrorInfo::empty();
+                err.code = ENIGMA_INTERNAL_ERROR;
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_generate_key(
+    in_device: *mut EnigmaDevice,
+    in_key_type: u32,
+    in_key_usage: u32,
+    in_key_size: u16,
+    in_label: *const c_char,
+    out_key_id: *mut u32,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null() || out_key_id.is_null() {
+        if !out_error.is_null() {
+            let mut err = EnigmaErrorInfo::empty();
+            err.code = ENIGMA_INVALID_ARG;
+            unsafe {
+                out_error.write(err);
+            }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let key_type = KeyType::try_from(in_key_type)
+            .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument))?;
+        let key_usage = KeyUsage::try_from(in_key_usage)
+            .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument))?;
+        let key_label = unsafe {
+            CStr::from_ptr(in_label)
+                .to_str()
+                .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument))?
+        };
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| {
+                let mut err = EnigmaErrorInfo::empty();
+                err.code = ENIGMA_INTERNAL_ERROR;
+                err
+            })?
+            .as_secs() as u32;
+
+        let request = GenerateKeyRequest {
+            key_type,
+            key_usage,
+            key_size: in_key_size,
+            label: key_label,
+            timestamp,
+        };
+
+        let device = unsafe { &mut *in_device };
+
+        device
+            .device
+            .generate_key(request)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))
+    });
+
+    match outcome {
+        Ok(Ok(result)) => unsafe {
+            out_key_id.write(result.key_id);
+            if !out_error.is_null() {
+                let err = EnigmaErrorInfo::empty();
+                out_error.write(err);
+            }
+            ENIGMA_OK
+        },
         Ok(Err(err)) => {
             let code = err.code;
             if !out_error.is_null() {

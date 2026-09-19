@@ -2,7 +2,9 @@ use crate::codec::{KmDecode, KmEncode};
 use crate::crypto::{
     DecryptRequest, EncryptDecryptResponse, EncryptRequest, SignRequest, Signature, VerifyRequest,
 };
-use crate::key::{GetPublicKeyRequest, KeyList, KeyListFilter, PublicKey};
+use crate::key::{
+    GenerateKeyRequest, GenerateKeyResponse, GetPublicKeyRequest, KeyList, KeyListFilter, PublicKey,
+};
 use crate::protocol::{
     EmptyRequest, KmCommand, KmFrameHeader, usb_decode_response, usb_encode_request,
 };
@@ -170,6 +172,13 @@ impl Device {
 
     pub fn lock(&mut self) -> Result<(), EnigmaError> {
         self.transact(KmCommand::Lock, EmptyRequest {})
+    }
+
+    pub fn generate_key(
+        &mut self,
+        request: GenerateKeyRequest,
+    ) -> Result<GenerateKeyResponse, EnigmaError> {
+        self.transact(KmCommand::GenerateKey, request)
     }
 
     pub fn encrypt(

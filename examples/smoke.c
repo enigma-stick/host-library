@@ -1,8 +1,5 @@
 #include "../include/enigma.h"
 #include <stdio.h>
-#include <string.h>
-
-#define KEY_ID 0x4B4D1000
 
 int main(void) {
 
@@ -23,34 +20,16 @@ int main(void) {
     goto cleanup;
   }
 
-  const char *plaintext = "This is the message to encrypt!";
-  uint8_t ciphertext[512];
-  size_t cipher_len = 0;
-  res = enigma_encrypt(device, KEY_ID, (uint8_t *)plaintext, strlen(plaintext),
-                       ciphertext, sizeof(ciphertext), &cipher_len, &error);
+  uint32_t generated_key_id = 0;
+  res =
+      enigma_generate_key(device, enigma_key_type_aes, enigma_key_usage_encrypt,
+                          256, "host-lib-test", &generated_key_id, &error);
   if (res != ENIGMA_OK) {
-    printf("Could not encrypt message (%02x) - %s\n", res, error.message);
+    printf("Could not generate key (%02x) - %s\n", res, error.message);
     exit = 1;
     goto cleanup;
   }
-  printf("Encrypted message: %lu\n", cipher_len);
-
-  for (size_t i = 0; i < cipher_len; i++) {
-    printf("%02X ", ciphertext[i]);
-  }
-  printf("\n");
-
-  uint8_t decrypt_res[512];
-  size_t decrypt_len = 0;
-  res = enigma_decrypt(device, KEY_ID, ciphertext, cipher_len, decrypt_res,
-                       sizeof(decrypt_res), &decrypt_len, &error);
-  if (res != ENIGMA_OK) {
-    printf("Could not decrypt message (%02x) - %s\n", res, error.message);
-    exit = 1;
-    goto cleanup;
-  }
-  decrypt_res[decrypt_len] = '\0';
-  printf("Decrypted message: %s\n", (char *)decrypt_res);
+  printf("Generated key %08X\n", generated_key_id);
 
 cleanup:
   res = enigma_lock(device, &error);

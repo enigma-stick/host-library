@@ -128,6 +128,35 @@ enigma_result enigma_authenticate(enigma_device *device, const char *pin,
 enigma_result enigma_lock(enigma_device *device, enigma_error *error);
 
 /**
+ *  @brief Generate a key on device
+ *
+ *  Generate a key on the secure element. Supported key types, usages, and
+ *  sizes:
+ *
+ *  - AES 128/256 : ENCRYPT
+ *  - HMAC 256/512 : SIGN
+ *  - RSA 1024/2048/4096 : ENCRYPT,SIGN
+ *  - EC P256/P384/P512 : SIGN,DERIVE
+ *
+ *  Please note that RSA 4096 generation takes around 30 seconds to complete.
+ *  Most other keys and respective sizes complete within around 1-2 seconds.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_type Key type
+ *  @param[in] key_usage Key usage
+ *  @param[in] size Key size in bits (or curve for EC)
+ *  @param[in] label Key label
+ *  @param[out] key_id Resulting key ID
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_generate_key(enigma_device *device,
+                                  enigma_key_type key_type,
+                                  enigma_key_usage key_usage, uint16_t key_size,
+                                  const char *label, uint32_t *key_id,
+                                  enigma_error *error);
+
+/**
  *  @brief Encrypt arbitrary data
  *
  *  Encrypt arbitrary plaintext with an ENCRYPT key. The firmware will reject

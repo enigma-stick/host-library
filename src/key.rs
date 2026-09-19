@@ -158,6 +158,37 @@ impl KmEncode for GetPublicKeyRequest {
     }
 }
 
+pub struct GenerateKeyRequest<'a> {
+    pub key_type: KeyType,
+    pub key_usage: KeyUsage,
+    pub key_size: u16,
+    pub label: &'a str,
+    pub timestamp: u32,
+}
+
+impl KmEncode for GenerateKeyRequest<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.key_type as u32);
+        encoder.write_u32(self.key_usage as u32);
+        encoder.write_u16(self.key_size);
+        encoder.write_str(self.label);
+        encoder.write_u32(self.timestamp);
+        encoder.bytes()
+    }
+}
+
+pub struct GenerateKeyResponse {
+    pub key_id: u32,
+}
+
+impl KmDecode<GenerateKeyResponse> for GenerateKeyResponse {
+    fn decode(decoder: &mut Decoder) -> Result<GenerateKeyResponse, DecodeError> {
+        let key_id = decoder.read_u32()?;
+        Ok(Self { key_id })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
