@@ -1,6 +1,8 @@
 #include "../include/enigma.h"
 #include <stdio.h>
 
+#define KEY_ID 0x4B4D1006
+
 int main(void) {
 
   int exit = 0;
@@ -20,16 +22,13 @@ int main(void) {
     goto cleanup;
   }
 
-  uint32_t generated_key_id = 0;
-  res =
-      enigma_generate_key(device, enigma_key_type_aes, enigma_key_usage_encrypt,
-                          256, "host-lib-test", &generated_key_id, &error);
+  res = enigma_destroy_key(device, KEY_ID, &error);
   if (res != ENIGMA_OK) {
-    printf("Could not generate key (%02x) - %s\n", res, error.message);
+    printf("Could not destroy key (%02X) - %s\n", res, error.message);
     exit = 1;
     goto cleanup;
   }
-  printf("Generated key %08X\n", generated_key_id);
+  printf("Destroyed key\n");
 
 cleanup:
   res = enigma_lock(device, &error);

@@ -13,6 +13,7 @@ pub enum KmCommand {
     Verify = 0x24,
     GetPublicKey = 0x30,
     ListKeys = 0x40,
+    DestroyKey = 0x41,
 }
 
 impl KmCommand {
@@ -28,6 +29,7 @@ impl KmCommand {
             Self::Verify => 0x24,
             Self::GetPublicKey => 0x30,
             Self::ListKeys => 0x40,
+            Self::DestroyKey => 0x00,
         }
     }
 }

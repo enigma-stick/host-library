@@ -1034,6 +1034,62 @@ pub unsafe extern "C" fn enigma_key_list_free(in_list: *const EnigmaKeyList) {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_destroy_key(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if in_device.is_null() || in_key_id == 0 {
+        if !out_error.is_null() {
+            let err = EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument);
+            unsafe { out_error.write(err) };
+            return ENIGMA_INVALID_ARG;
+        }
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let device = unsafe { &mut *in_device };
+
+        device
+            .device
+            .destroy_key(in_key_id)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))
+    });
+
+    match outcome {
+        Ok(Ok(_)) => {
+            if !out_error.is_null() {
+                let err = EnigmaErrorInfo::empty();
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            ENIGMA_OK
+        }
+        Ok(Err(err)) => {
+            let code = err.code;
+            if !out_error.is_null() {
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            code
+        }
+        Err(panic) => {
+            if !out_error.is_null() {
+                let mut err = EnigmaErrorInfo::empty();
+                err.code = ENIGMA_INTERNAL_ERROR;
+                unsafe {
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn enigma_close(
     in_device: *mut EnigmaDevice,
     out_error: *mut EnigmaErrorInfo,

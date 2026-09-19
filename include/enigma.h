@@ -311,6 +311,20 @@ enigma_result enigma_list_keys(enigma_device *device,
 void enigma_key_list_free(const enigma_key_list *list);
 
 /**
+ *  @brief Destroy a key on device
+ *
+ *  Given a key ID, destroy that key on the secure element. This action cannot
+ *  be undone.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] key_id Key ID to destroy
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_destroy_key(enigma_device *device, uint32_t key_id,
+                                 enigma_error *error);
+
+/**
  *  @brief Close device
  *
  *  Close the USB connection and release the handle back to the kernel.

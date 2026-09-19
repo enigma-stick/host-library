@@ -189,6 +189,18 @@ impl KmDecode<GenerateKeyResponse> for GenerateKeyResponse {
     }
 }
 
+pub struct DestroyKeyRequest {
+    pub key_id: u32,
+}
+
+impl KmEncode for DestroyKeyRequest {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.key_id);
+        encoder.bytes()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

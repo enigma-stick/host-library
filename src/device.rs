@@ -3,7 +3,8 @@ use crate::crypto::{
     DecryptRequest, EncryptDecryptResponse, EncryptRequest, SignRequest, Signature, VerifyRequest,
 };
 use crate::key::{
-    GenerateKeyRequest, GenerateKeyResponse, GetPublicKeyRequest, KeyList, KeyListFilter, PublicKey,
+    DestroyKeyRequest, GenerateKeyRequest, GenerateKeyResponse, GetPublicKeyRequest, KeyList,
+    KeyListFilter, PublicKey,
 };
 use crate::protocol::{
     EmptyRequest, KmCommand, KmFrameHeader, usb_decode_response, usb_encode_request,
@@ -210,6 +211,11 @@ impl Device {
 
     pub fn list_keys(&mut self, filter: KeyListFilter<'_>) -> Result<KeyList, EnigmaError> {
         self.transact(KmCommand::ListKeys, filter)
+    }
+
+    pub fn destroy_key(&mut self, key_id: u32) -> Result<(), EnigmaError> {
+        let request = DestroyKeyRequest { key_id };
+        self.transact(KmCommand::DestroyKey, request)
     }
 
     pub fn close(&mut self) -> Result<(), EnigmaError> {
