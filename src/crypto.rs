@@ -1,5 +1,6 @@
 use crate::codec::{Decoder, Encoder, KmDecode, KmEncode};
 use crate::error::DecodeError;
+use crate::key::PublicKeyEncoding;
 
 pub struct SignRequest<'a> {
     pub key_id: u32,
@@ -84,6 +85,46 @@ impl KmDecode<EncryptDecryptResponse> for EncryptDecryptResponse {
         let data = bytes.into_boxed_slice();
 
         Ok(Self { data })
+    }
+}
+
+pub struct EcdhRequest<'a> {
+    pub private_key_id: u32,
+    pub public_key_encoding: PublicKeyEncoding,
+    pub public_key_bytes: &'a [u8],
+    pub result_label: &'a str,
+    pub timestamp: u32,
+}
+
+impl KmEncode for EcdhRequest<'_> {
+    fn encode(&self) -> Vec<u8> {
+        let mut encoder = Encoder::new();
+        encoder.write_u32(self.private_key_id);
+        encoder.write_u32(self.public_key_encoding as u32);
+        encoder.write_bytes(self.public_key_bytes);
+        encoder.write_str(self.result_label);
+        encoder.write_u32(self.timestamp);
+        encoder.bytes()
+    }
+}
+
+pub struct EcdhResponse {
+    pub key_id: u32,
+    pub salt: Box<[u8]>,
+    pub info: String,
+}
+
+impl KmDecode<EcdhResponse> for EcdhResponse {
+    fn decode(decoder: &mut Decoder) -> Result<EcdhResponse, DecodeError> {
+        let key_id = decoder.read_u32()?;
+        let salt_len = decoder.read_u32()?;
+        let salt = decoder
+            .read_bytes(salt_len as usize)?
+            .to_vec()
+            .into_boxed_slice();
+        let info = decoder.read_str()?.to_string();
+
+        Ok(Self { key_id, salt, info })
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::codec::{KmDecode, KmEncode};
 use crate::crypto::{
-    DecryptRequest, EncryptDecryptResponse, EncryptRequest, SignRequest, Signature, VerifyRequest,
+    DecryptRequest, EcdhRequest, EcdhResponse, EncryptDecryptResponse, EncryptRequest, SignRequest,
+    Signature, VerifyRequest,
 };
 use crate::key::{
     DestroyKeyRequest, GenerateKeyRequest, GenerateKeyResponse, GetPublicKeyRequest, KeyList,
@@ -202,6 +203,10 @@ impl Device {
 
     pub fn verify(&mut self, request: VerifyRequest) -> Result<bool, EnigmaError> {
         self.transact(KmCommand::Verify, request)
+    }
+
+    pub fn ecdh(&mut self, request: EcdhRequest) -> Result<EcdhResponse, EnigmaError> {
+        self.transact(KmCommand::Ecdh, request)
     }
 
     pub fn get_public_key(&mut self, key_id: u32) -> Result<PublicKey, EnigmaError> {

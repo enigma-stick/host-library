@@ -57,6 +57,9 @@ typedef uint32_t enigma_key_usage;
 #define enigma_key_usage_sign 0x02
 #define enigma_key_usage_derive 0x03
 
+typedef uint32_t enigma_public_key_encoding;
+#define enigma_public_key_encoding_der_spki 0x01
+
 typedef struct {
   uint32_t id;
   enigma_key_type type;
@@ -70,6 +73,13 @@ typedef struct {
   uint32_t count;
   const enigma_key_meta *keys;
 } enigma_key_list;
+
+typedef struct {
+  uint32_t key_id;
+  const uint8_t *salt;
+  size_t salt_len;
+  const char *info;
+} enigma_ecdh_result;
 
 /**
  *  @brief Open a connection to the Enigma device
@@ -244,16 +254,54 @@ enigma_result enigma_verify(enigma_device *device, uint32_t key_id,
                             bool *verified, enigma_error *error);
 
 /**
+ *  @brief Perform ECDH + HKDF to derive an AES key
+ *
+ *  ECDH requires a private key, and a peer's public key. The private key in
+ *  this operation resides on the secure element and is selected via the
+ *  `private_key_id`. The peer public key bytes are provided in `public_key`.
+ *  Internally, the secure element performs ECDH and HKDF with a random salt.
+ *  The resulting key also resides on the secure element.
+ *
+ *  To compute the shared secret and resulting AES key, export the private key
+ *  pair's public key material. Also use the resulting info string and salt in
+ *  the HKDF operation.
+ *
+ *  @param[in] device Device handle
+ *  @param[in] private_key_id Private key ID
+ *  @param[in] encoding Public key encoding
+ *  @param[in] public_key Public key bytes
+ *  @param[in] public_key_len Public key buffer length
+ *  @param[in] label Resulting key's label
+ *  @param[out] result ECDH result
+ *  @param[out] error NULL or error
+ *  @retval code Error code
+ */
+enigma_result enigma_ecdh(enigma_device *device, uint32_t private_key_id,
+                          enigma_public_key_encoding encoding,
+                          const uint8_t *public_key, size_t public_key_len,
+                          const char *label, const enigma_ecdh_result **result,
+                          enigma_error *error);
+
+/**
+ *  @brief Free ECDH result
+ *
+ *  @param[in] result ECDH result from `enigma_ecdh`
+ *  @see enigma_ecdh()
+ */
+void enigma_ecdh_free(const enigma_ecdh_result *result);
+
+/**
  *  @brief Get public key material
  *
- *  Keypairs are generated on the secure element but do not return the public
- *  key as part of that operation. The returned `public_key` is formatted to
- *  be SubjectPublicKeyInfo DER bytes.
+ *  Keypairs are generated on the secure element but do not return the
+ * public key as part of that operation. The returned `public_key` is
+ * formatted to be SubjectPublicKeyInfo DER bytes.
  *
  *  Public key memory must be allocated by the caller, and the buffer size
  *  passed in via `capacity`. If not enough memory was allocated, the error
- *  code is ENIGMA_BUFFER_TOO_SMALL. When public_key = NULL and capacity = 0,
- *  the library will return the necessary bytes to allocate in `public_key_len`.
+ *  code is ENIGMA_BUFFER_TOO_SMALL. When public_key = NULL and capacity =
+ * 0, the library will return the necessary bytes to allocate in
+ * `public_key_len`.
  *
  *  @param[in] device Device handle
  *  @param[in] key_id Target key ID

@@ -47,6 +47,23 @@ impl TryFrom<u32> for KeyUsage {
     }
 }
 
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublicKeyEncoding {
+    DerSpki = 0x01,
+}
+
+impl TryFrom<u32> for PublicKeyEncoding {
+    type Error = DecodeError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0x01 => Ok(Self::DerSpki),
+            _ => Err(DecodeError::InvalidArgument),
+        }
+    }
+}
+
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct KeyFilterFlags: u32 {

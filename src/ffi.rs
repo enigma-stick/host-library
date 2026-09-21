@@ -6,8 +6,8 @@ use std::{
 
 use crate::{
     Device, EnigmaError, KeyType, KeyUsage,
-    crypto::{DecryptRequest, EncryptRequest, SignRequest, VerifyRequest},
-    key::{GenerateKeyRequest, KeyListFilter},
+    crypto::{DecryptRequest, EcdhRequest, EncryptRequest, SignRequest, VerifyRequest},
+    key::{GenerateKeyRequest, KeyListFilter, PublicKeyEncoding},
 };
 
 const ENIGMA_OK: i32 = 0x00;
@@ -57,6 +57,21 @@ struct OwnedKeyList {
     view: EnigmaKeyList,
     entries: Box<[EnigmaKeyMeta]>,
     labels: Vec<CString>,
+}
+
+#[repr(C)]
+pub struct EnigmaEcdhResult {
+    pub key_id: u32,
+    pub salt: *const u8,
+    pub salt_len: usize,
+    pub info: *const c_char,
+}
+
+#[repr(C)]
+struct OwnedEcdhResult {
+    view: EnigmaEcdhResult,
+    owned_salt: Box<[u8]>,
+    owned_info: CString,
 }
 
 #[derive(Debug)]
@@ -782,6 +797,140 @@ pub unsafe extern "C" fn enigma_verify(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_ecdh(
+    in_device: *mut EnigmaDevice,
+    in_key_id: u32,
+    in_encoding: u32,
+    in_public_key: *const u8,
+    in_public_key_len: usize,
+    in_label: *const c_char,
+    out_result: *mut *const EnigmaEcdhResult,
+    out_error: *mut EnigmaErrorInfo,
+) -> i32 {
+    if !out_result.is_null() {
+        unsafe { out_result.write(ptr::null()) };
+    }
+
+    if in_device.is_null()
+        || in_key_id == 0
+        || in_encoding == 0
+        || in_public_key.is_null()
+        || in_public_key_len == 0
+        || in_label.is_null()
+        || out_result.is_null()
+    {
+        let mut err = EnigmaErrorInfo::empty();
+        err.code = ENIGMA_INVALID_ARG;
+        if !out_error.is_null() {
+            unsafe { out_error.write(err) }
+        }
+        return ENIGMA_INVALID_ARG;
+    }
+
+    let outcome = std::panic::catch_unwind(|| {
+        let encoding = PublicKeyEncoding::try_from(in_encoding)
+            .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument))?;
+        let public_key = unsafe { slice::from_raw_parts(in_public_key, in_public_key_len) };
+        let label = unsafe {
+            CStr::from_ptr(in_label)
+                .to_str()
+                .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::InvalidArgument))?
+        };
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| {
+                let mut err = EnigmaErrorInfo::empty();
+                err.code = ENIGMA_INTERNAL_ERROR;
+                err
+            })?
+            .as_secs() as u32;
+
+        let request = EcdhRequest {
+            private_key_id: in_key_id,
+            public_key_encoding: encoding,
+            public_key_bytes: public_key,
+            result_label: label,
+            timestamp,
+        };
+
+        let device = unsafe { &mut *in_device };
+
+        let result = device
+            .device
+            .ecdh(request)
+            .map_err(|err| EnigmaErrorInfo::from_error(&err))?;
+
+        let owned_info = CString::new(result.info)
+            .map_err(|_| EnigmaErrorInfo::from_error(&EnigmaError::MalformedOutput))?;
+        let owned_salt = result.salt;
+
+        let view = EnigmaEcdhResult {
+            key_id: result.key_id,
+            salt: owned_salt.as_ptr(),
+            salt_len: owned_salt.len(),
+            info: owned_info.as_ptr(),
+        };
+
+        let owned = Box::new(OwnedEcdhResult {
+            view,
+            owned_salt,
+            owned_info,
+        });
+
+        Ok::<Box<OwnedEcdhResult>, EnigmaErrorInfo>(owned)
+    });
+
+    match outcome {
+        Ok(Ok(result)) => unsafe {
+            let pointer = Box::into_raw(result).cast::<EnigmaEcdhResult>();
+            out_result.write(pointer);
+            let err = EnigmaErrorInfo::empty();
+            if !out_error.is_null() {
+                out_error.write(err);
+            }
+            ENIGMA_OK
+        },
+        Ok(Err(err)) => {
+            let code = err.code;
+            unsafe {
+                if !out_error.is_null() {
+                    out_error.write(err);
+                }
+            }
+            code
+        }
+        Err(panic) => {
+            unsafe {
+                if !out_error.is_null() {
+                    let mut err = EnigmaErrorInfo::empty();
+                    err.code = ENIGMA_INTERNAL_ERROR;
+                    out_error.write(err);
+                }
+            }
+            std::mem::forget(panic);
+            return ENIGMA_INTERNAL_ERROR;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn enigma_ecdh_free(in_result: *const EnigmaEcdhResult) {
+    if in_result.is_null() {
+        return;
+    }
+
+    let outcome = std::panic::catch_unwind(|| unsafe {
+        drop(Box::from_raw(
+            in_result.cast_mut().cast::<OwnedEcdhResult>(),
+        ));
+    });
+
+    if let Err(panic) = outcome {
+        std::mem::forget(panic);
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn enigma_export_public_key(
     in_device: *mut EnigmaDevice,
     in_key_id: u32,
@@ -1142,6 +1291,76 @@ pub unsafe extern "C" fn enigma_close(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ecdh_failure_clears_output_pointer() {
+        let previous = super::EnigmaEcdhResult {
+            key_id: 0,
+            salt: std::ptr::null(),
+            salt_len: 0,
+            info: std::ptr::null(),
+        };
+        // A valid sentinel address lets us check the output slot without
+        // constructing a device or dereferencing any invalid input pointers.
+        let mut output = &previous as *const super::EnigmaEcdhResult;
+        let code = unsafe {
+            super::enigma_ecdh(
+                std::ptr::null_mut(),
+                0,
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                &mut output,
+                std::ptr::null_mut(),
+            )
+        };
+        assert_eq!(code, super::ENIGMA_INVALID_ARG);
+        assert!(
+            output.is_null(),
+            "failure must not leave a stale result pointer"
+        );
+    }
+
+    #[test]
+    fn ecdh_owner_view_and_free_round_trip() {
+        // Tests the layout and real free function with an owned fixture;
+        // does not execute the USB-bound conversion path or prove leak freedom.
+        for salt in [vec![], vec![0, 0x80, 0xFF, 1]] {
+            let expected = salt.clone();
+            let owned_salt = salt.into_boxed_slice();
+            let owned_info = std::ffi::CString::new("test-info-é").unwrap();
+            let view = super::EnigmaEcdhResult {
+                key_id: 0x01020304,
+                salt: owned_salt.as_ptr(),
+                salt_len: owned_salt.len(),
+                info: owned_info.as_ptr(),
+            };
+            let owner = Box::new(super::OwnedEcdhResult {
+                view,
+                owned_salt,
+                owned_info,
+            });
+            assert_eq!(
+                (&*owner as *const super::OwnedEcdhResult).cast::<super::EnigmaEcdhResult>(),
+                &owner.view as *const super::EnigmaEcdhResult,
+            );
+            let raw = Box::into_raw(owner).cast::<super::EnigmaEcdhResult>();
+            unsafe {
+                assert_eq!((*raw).key_id, 0x01020304);
+                assert_eq!(
+                    std::slice::from_raw_parts((*raw).salt, (*raw).salt_len),
+                    expected
+                );
+                assert_eq!(
+                    std::ffi::CStr::from_ptr((*raw).info).to_str().unwrap(),
+                    "test-info-é"
+                );
+                super::enigma_ecdh_free(raw);
+            }
+        }
+        unsafe { super::enigma_ecdh_free(std::ptr::null()) };
+    }
+
     use std::ffi::CStr;
 
     use super::*;
