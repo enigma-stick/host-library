@@ -1,0 +1,8 @@
+PROJECT_NAME          = Enigma C API
+INPUT                 = include/enigma.h
+OUTPUT_DIRECTORY      = target/c-api-docs
+GENERATE_HTML         = YES
+GENERATE_LATEX        = NO
+EXTRACT_ALL           = NO
+WARNINGS              = YES
+WARN_IF_DOC_ERROR     = YES

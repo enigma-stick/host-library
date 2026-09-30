@@ -1,3 +1,8 @@
+/**
+ *  @file
+ *  @brief Enigma C API
+ */
+
 #ifndef LIB_ENIGMA_H
 #define LIB_ENIGMA_H
 
@@ -116,7 +121,7 @@ enigma_result enigma_status(enigma_device *device, enigma_status_info *status,
  *  require the token to be authenticated. Authentication only works if the
  *  token is already locked.
  *
- *  @paran[in] device Device handle
+ *  @param[in] device Device handle
  *  @param[in] pin Device authentication PIN
  *  @param[out] error NULL or error if status could not be retrieved
  *  @retval code Error code
